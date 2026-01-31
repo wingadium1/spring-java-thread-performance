@@ -29,18 +29,24 @@ Open 3 terminal windows and run:
 ```bash
 cd spring-mvc-traditional
 mvn spring-boot:run
+# Or with a specific workload profile:
+# mvn spring-boot:run -Dspring-boot.run.arguments="--app.workload.profile=REALISTIC_MIXED"
 ```
 
 **Terminal 2 - Virtual Threads:**
 ```bash
 cd spring-virtual-threads
 mvn spring-boot:run
+# Or with CPU-intensive workload:
+# mvn spring-boot:run -Dspring-boot.run.arguments="--app.workload.profile=CPU_INTENSIVE"
 ```
 
 **Terminal 3 - WebFlux:**
 ```bash
 cd spring-webflux
 mvn spring-boot:run
+# Or with extreme load testing:
+# mvn spring-boot:run -Dspring-boot.run.arguments="--app.workload.profile=EXTREME"
 ```
 
 ### 3. Test the Applications
@@ -59,6 +65,22 @@ curl http://localhost:8081/api/query
 # WebFlux (port 8082)
 curl http://localhost:8082/api/info
 curl http://localhost:8082/api/query
+```
+
+### 4. Test Enhanced Features
+
+```bash
+# CPU-intensive work
+curl http://localhost:8080/api/cpu/100
+
+# Stress test (combined I/O + CPU + memory)
+curl "http://localhost:8080/api/stress?queries=5&cpuMs=100"
+
+# Multiple queries
+curl http://localhost:8080/api/multiple/3
+
+# Run demonstration script
+./demo-profiles.sh 8080
 ```
 
 ## Quick Start (Docker)
@@ -168,9 +190,30 @@ docker-compose down
 ## Next Steps
 
 - Read [TESTING-GUIDE.md](TESTING-GUIDE.md) for comprehensive testing strategies
+- Read [HARDWARE-LIMITS-GUIDE.md](HARDWARE-LIMITS-GUIDE.md) for pushing systems to limits
 - Read [README.md](README.md) for detailed documentation
 - Check [deployment/](deployment/) for production deployment guides
 - Explore the code to understand implementation differences
+
+## Workload Profiles
+
+Test different scenarios by setting the workload profile:
+
+```bash
+# Light load (baseline)
+mvn spring-boot:run -Dspring-boot.run.arguments="--app.workload.profile=LIGHT"
+
+# Realistic mixed (I/O + CPU + memory)
+mvn spring-boot:run -Dspring-boot.run.arguments="--app.workload.profile=REALISTIC_MIXED"
+
+# CPU-intensive (data processing)
+mvn spring-boot:run -Dspring-boot.run.arguments="--app.workload.profile=CPU_INTENSIVE"
+
+# Extreme load (stress testing)
+mvn spring-boot:run -Dspring-boot.run.arguments="--app.workload.profile=EXTREME"
+```
+
+See [HARDWARE-LIMITS-GUIDE.md](HARDWARE-LIMITS-GUIDE.md) for details on all profiles.
 
 ## Common Issues
 
