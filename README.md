@@ -5,12 +5,51 @@ A comprehensive performance comparison project for different Spring Boot threadi
 - **Spring Boot with Virtual Threads** (Java 21)
 - **Spring WebFlux** (Reactive, Reactor Netty, NIO)
 
+## Key Features
+
+- **Enhanced Database Simulator** - Realistic workload simulation with I/O, CPU, and memory patterns
+- **Multiple Workload Profiles** - From light (10-50ms) to extreme (200-1000ms) loads
+- **Hardware Limit Testing** - Push systems to breaking points to understand resource constraints
+- **Comprehensive Metrics** - Thread count, memory usage, GC activity, latency distribution
+- **Container-Ready** - Docker, Kubernetes, and VM deployment configurations
+- **Production Scenarios** - Test real-world patterns: CRUD, batch processing, report generation
+
+## Database Simulator
+
+The enhanced database simulator provides realistic workload patterns:
+
+### Workload Profiles
+
+| Profile | I/O (ms) | CPU (ms) | Memory | Use Case |
+|---------|----------|----------|---------|----------|
+| LIGHT | 10-50 | - | - | Baseline testing |
+| MEDIUM | 50-200 | - | - | Standard CRUD (default) |
+| HEAVY | 100-500 | - | - | Slow queries |
+| IO_PLUS_CPU | 50-200 | 10-50 | - | Query + processing |
+| IO_PLUS_MEMORY | 50-200 | - | 1-5MB | Large result sets |
+| REALISTIC_MIXED | 50-200 | 20-100 | 512KB-2MB | Real-world simulation |
+| CPU_INTENSIVE | 10-50 | 100-500 | - | Data processing |
+| EXTREME | 200-1000 | 50-200 | 5-10MB | Stress testing |
+
+### Setting Workload Profile
+
+```bash
+# Via command line
+mvn spring-boot:run -Dspring-boot.run.arguments="--app.workload.profile=REALISTIC_MIXED"
+
+# Via application properties
+app.workload.profile=EXTREME
+
+# Via Spring profile
+mvn spring-boot:run -Dspring-boot.run.arguments="--spring.profiles.active=heavy"
+```
+
 ## Project Structure
 
 ```
 spring-thread-performance/
 ├── common/                      # Shared utilities and models
-│   └── DatabaseSimulator       # Simulates blocking database calls
+│   └── DatabaseSimulator       # Enhanced I/O + CPU + memory simulator
 ├── spring-mvc-traditional/     # Traditional Spring MVC with Tomcat
 ├── spring-virtual-threads/     # Spring Boot with Virtual Threads (Java 21)
 ├── spring-webflux/            # Spring WebFlux with Reactor Netty
@@ -101,10 +140,12 @@ All three applications expose the same REST API endpoints:
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/hello` | Simple hello message |
-| `GET /api/query` | Execute a simulated database query (50-200ms) |
+| `GET /api/query` | Execute a simulated database query (profile-based timing) |
 | `GET /api/query/{delay}` | Execute query with custom delay in milliseconds |
 | `GET /api/multiple/{count}` | Execute multiple sequential queries |
-| `GET /api/info` | Application information and thread type |
+| `GET /api/cpu/{durationMs}` | Execute CPU-intensive work for specified duration |
+| `GET /api/stress?queries=N&cpuMs=M` | Combined stress test (I/O + CPU + memory) |
+| `GET /api/info` | Application information, thread type, and workload profile |
 
 ### Health and Metrics
 
@@ -360,6 +401,15 @@ backend spring_backend
 - **Resource Usage**: CPU, Memory, Thread count
 - **Concurrency**: Maximum concurrent requests handled
 - **Errors**: Error rate under load
+
+## Additional Documentation
+
+- **[QUICKSTART.md](QUICKSTART.md)** - Get started in 5 minutes
+- **[TESTING-GUIDE.md](TESTING-GUIDE.md)** - Comprehensive performance testing strategies
+- **[HARDWARE-LIMITS-GUIDE.md](HARDWARE-LIMITS-GUIDE.md)** - Push systems to hardware limits
+- **[DIFFERENCES.md](DIFFERENCES.md)** - Detailed comparison of implementations
+- **[deployment/README.md](deployment/README.md)** - VM deployment guide
+- **[deployment/kubernetes/README.md](deployment/kubernetes/README.md)** - Kubernetes deployment guide
 
 ## License
 

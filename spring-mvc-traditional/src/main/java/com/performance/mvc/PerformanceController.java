@@ -34,12 +34,39 @@ public class PerformanceController {
         String result = databaseSimulator.executeMultipleQueries(count);
         return new ApiResponse("Multiple queries executed", result);
     }
+    
+    @GetMapping("/cpu/{durationMs}")
+    public ApiResponse cpuIntensive(@PathVariable long durationMs) {
+        String result = databaseSimulator.executeCpuIntensiveWork(durationMs);
+        return new ApiResponse("CPU-intensive work completed", result);
+    }
+    
+    @GetMapping("/stress")
+    public ApiResponse stressTest(
+            @RequestParam(defaultValue = "5") int queries,
+            @RequestParam(defaultValue = "100") long cpuMs) {
+        long startTime = System.currentTimeMillis();
+        
+        // Execute multiple queries (I/O + CPU + memory)
+        String queryResult = databaseSimulator.executeMultipleQueries(queries);
+        
+        // Additional CPU work
+        String cpuResult = databaseSimulator.executeCpuIntensiveWork(cpuMs);
+        
+        long totalTime = System.currentTimeMillis() - startTime;
+        
+        String combinedResult = String.format("Stress test completed in %dms. Queries: %s. CPU: %s", 
+            totalTime, queryResult, cpuResult);
+        
+        return new ApiResponse("Stress test executed", combinedResult);
+    }
 
     @GetMapping("/info")
     public ApiResponse info() {
         ApiResponse response = new ApiResponse();
         response.setMessage("Traditional Spring MVC with Tomcat");
-        response.setData("Blocking I/O with platform threads");
+        response.setData("Blocking I/O with platform threads. Profile: " + 
+            databaseSimulator.getProfile().name());
         return response;
     }
 }

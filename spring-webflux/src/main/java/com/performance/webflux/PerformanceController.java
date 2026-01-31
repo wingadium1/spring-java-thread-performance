@@ -43,12 +43,43 @@ public class PerformanceController {
             return new ApiResponse("Multiple queries executed", result);
         }).subscribeOn(Schedulers.boundedElastic());
     }
+    
+    @GetMapping("/cpu/{durationMs}")
+    public Mono<ApiResponse> cpuIntensive(@PathVariable long durationMs) {
+        return Mono.fromCallable(() -> {
+            String result = databaseSimulator.executeCpuIntensiveWork(durationMs);
+            return new ApiResponse("CPU-intensive work completed", result);
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+    
+    @GetMapping("/stress")
+    public Mono<ApiResponse> stressTest(
+            @RequestParam(defaultValue = "5") int queries,
+            @RequestParam(defaultValue = "100") long cpuMs) {
+        return Mono.fromCallable(() -> {
+            long startTime = System.currentTimeMillis();
+            
+            // Execute multiple queries (I/O + CPU + memory)
+            String queryResult = databaseSimulator.executeMultipleQueries(queries);
+            
+            // Additional CPU work
+            String cpuResult = databaseSimulator.executeCpuIntensiveWork(cpuMs);
+            
+            long totalTime = System.currentTimeMillis() - startTime;
+            
+            String combinedResult = String.format("Stress test completed in %dms. Queries: %s. CPU: %s", 
+                totalTime, queryResult, cpuResult);
+            
+            return new ApiResponse("Stress test executed", combinedResult);
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
 
     @GetMapping("/info")
     public Mono<ApiResponse> info() {
         ApiResponse response = new ApiResponse();
         response.setMessage("Spring WebFlux with Reactor Netty");
-        response.setData("Reactive non-blocking I/O with event loop");
+        response.setData("Reactive non-blocking I/O with event loop. Profile: " + 
+            databaseSimulator.getProfile().name());
         return Mono.just(response);
     }
 }
