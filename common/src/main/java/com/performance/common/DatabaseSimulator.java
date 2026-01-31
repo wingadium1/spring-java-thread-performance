@@ -111,7 +111,7 @@ public class DatabaseSimulator {
         long cpuWork = simulateCpuWork();
         
         // 3. Simulate memory allocation (result set)
-        Object resultSet = simulateMemoryAllocation();
+        List<String> resultSet = simulateMemoryAllocation();
         
         long totalTime = System.currentTimeMillis() - startTime;
         
@@ -119,7 +119,7 @@ public class DatabaseSimulator {
             queryName, totalTime, ioDelay, cpuWork, Thread.currentThread().getName());
         
         // Keep result set in scope to prevent early GC
-        int resultSize = resultSet != null ? ((List<?>) resultSet).size() : 0;
+        int resultSize = resultSet.size();
         
         return String.format("Result for '%s' (took %dms, I/O: %dms, CPU: %dms, rows: %d)", 
             queryName, totalTime, ioDelay, cpuWork, resultSize);
@@ -150,9 +150,9 @@ public class DatabaseSimulator {
             }
         }
         
-        // Prevent optimization
-        if (result == Long.MAX_VALUE) {
-            logger.trace("Unlikely event: {}", result);
+        // Use result to prevent dead code elimination - trace level never enabled by default
+        if (logger.isTraceEnabled()) {
+            logger.trace("CPU work accumulated: {}", result);
         }
         
         return System.currentTimeMillis() - startTime;
@@ -160,9 +160,9 @@ public class DatabaseSimulator {
     
     /**
      * Simulates memory allocation for result sets.
-     * @return Allocated object (List simulating result set)
+     * @return Allocated List simulating result set
      */
-    private Object simulateMemoryAllocation() {
+    private List<String> simulateMemoryAllocation() {
         if (profile.minMemoryBytes == 0 && profile.maxMemoryBytes == 0) {
             return new ArrayList<>(0);
         }
@@ -234,10 +234,8 @@ public class DatabaseSimulator {
             }
             
             totalCpuTime += simulateCpuWork();
-            Object resultSet = simulateMemoryAllocation();
-            if (resultSet != null) {
-                totalRows += ((List<?>) resultSet).size();
-            }
+            List<String> resultSet = simulateMemoryAllocation();
+            totalRows += resultSet.size();
         }
         
         long totalTime = System.currentTimeMillis() - startTime;
