@@ -1,0 +1,17 @@
+[Unit]
+Description=Spring WebFlux Application
+After=network.target
+
+[Service]
+Type=simple
+User=springapp
+WorkingDirectory=/opt/spring-performance
+ExecStart=/usr/bin/java -Xms512m -Xmx2g -jar /opt/spring-performance/spring-webflux-1.0.0-SNAPSHOT.jar
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=spring-webflux
+
+[Install]
+WantedBy=multi-user.target
