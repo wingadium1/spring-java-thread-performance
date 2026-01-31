@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: spring-performance-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: spring-performance.example.com
+    http:
+      paths:
+      - path: /mvc
+        pathType: Prefix
+        backend:
+          service:
+            name: spring-mvc-traditional
+            port:
+              number: 8080
+      - path: /virtual
+        pathType: Prefix
+        backend:
+          service:
+            name: spring-virtual-threads
+            port:
+              number: 8081
+      - path: /webflux
+        pathType: Prefix
+        backend:
+          service:
+            name: spring-webflux
+            port:
+              number: 8082

@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spring-virtual-threads
+  labels:
+    app: spring-virtual-threads
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: spring-virtual-threads
+  template:
+    metadata:
+      labels:
+        app: spring-virtual-threads
+    spec:
+      containers:
+      - name: spring-virtual-threads
+        image: spring-performance/spring-virtual-threads:latest
+        ports:
+        - containerPort: 8081
+          name: http
+        env:
+        - name: JAVA_TOOL_OPTIONS
+          value: "-Xms512m -Xmx2g"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8081
+          initialDelaySeconds: 20
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spring-virtual-threads
+spec:
+  type: ClusterIP
+  selector:
+    app: spring-virtual-threads
+  ports:
+  - protocol: TCP
+    port: 8081
+    targetPort: 8081
