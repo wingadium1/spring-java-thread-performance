@@ -1,0 +1,173 @@
+name: Build and Deploy to Proxmox
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Spring Boot Applications
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+      
+      - name: Build with Maven
+        run: mvn clean package -DskipTests
+      
+      - name: Run tests
+        run: mvn test
+      
+      - name: Build Docker images with Jib
+        run: mvn jib:dockerBuild
+      
+      - name: Save Docker images as artifacts
+        run: |
+          mkdir -p docker-images
+          docker save spring-performance/spring-mvc-traditional:latest -o docker-images/spring-mvc-traditional.tar
+          docker save spring-performance/spring-virtual-threads:latest -o docker-images/spring-virtual-threads.tar
+          docker save spring-performance/spring-webflux:latest -o docker-images/spring-webflux.tar
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: spring-boot-jars
+          path: |
+            spring-mvc-traditional/target/*.jar
+            spring-virtual-threads/target/*.jar
+            spring-webflux/target/*.jar
+          retention-days: 7
+      
+      - name: Upload Docker images
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-images
+          path: docker-images/*.tar
+          retention-days: 7
+
+  deploy-proxmox:
+    name: Deploy to Proxmox Server
+    needs: build
+    runs-on: self-hosted
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: spring-boot-jars
+          path: ./artifacts
+      
+      - name: Download Docker images
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-images
+          path: ./docker-images
+      
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PROXMOX_SSH_KEY }}" > ~/.ssh/proxmox_key
+          chmod 600 ~/.ssh/proxmox_key
+          ssh-keyscan -H ${{ secrets.PROXMOX_HOST }} >> ~/.ssh/known_hosts
+      
+      - name: Deploy JAR files to Proxmox
+        run: |
+          # Create deployment directory on Proxmox
+          ssh -i ~/.ssh/proxmox_key ${{ secrets.PROXMOX_USER }}@${{ secrets.PROXMOX_HOST }} \
+            "sudo mkdir -p /opt/spring-performance && sudo chown ${{ secrets.PROXMOX_USER }}:${{ secrets.PROXMOX_USER }} /opt/spring-performance"
+          
+          # Copy JAR files
+          scp -i ~/.ssh/proxmox_key artifacts/spring-mvc-traditional/target/*.jar \
+            ${{ secrets.PROXMOX_USER }}@${{ secrets.PROXMOX_HOST }}:/opt/spring-performance/
+          scp -i ~/.ssh/proxmox_key artifacts/spring-virtual-threads/target/*.jar \
+            ${{ secrets.PROXMOX_USER }}@${{ secrets.PROXMOX_HOST }}:/opt/spring-performance/
+          scp -i ~/.ssh/proxmox_key artifacts/spring-webflux/target/*.jar \
+            ${{ secrets.PROXMOX_USER }}@${{ secrets.PROXMOX_HOST }}:/opt/spring-performance/
+      
+      - name: Deploy Docker images to Proxmox (Optional)
+        if: ${{ secrets.PROXMOX_DEPLOY_METHOD == 'docker' }}
+        run: |
+          # Transfer Docker images
+          scp -i ~/.ssh/proxmox_key docker-images/*.tar \
+            ${{ secrets.PROXMOX_USER }}@${{ secrets.PROXMOX_HOST }}:/tmp/
+          
+          # Load Docker images on Proxmox
+          ssh -i ~/.ssh/proxmox_key ${{ secrets.PROXMOX_USER }}@${{ secrets.PROXMOX_HOST }} << 'ENDSSH'
+            docker load < /tmp/spring-mvc-traditional.tar
+            docker load < /tmp/spring-virtual-threads.tar
+            docker load < /tmp/spring-webflux.tar
+            rm /tmp/*.tar
+          ENDSSH
+      
+      - name: Deploy systemd services
+        if: ${{ secrets.PROXMOX_DEPLOY_METHOD != 'docker' }}
+        run: |
+          # Copy systemd service files
+          scp -i ~/.ssh/proxmox_key deployment/*.service \
+            ${{ secrets.PROXMOX_USER }}@${{ secrets.PROXMOX_HOST }}:/tmp/
+          
+          # Install and restart services
+          ssh -i ~/.ssh/proxmox_key ${{ secrets.PROXMOX_USER }}@${{ secrets.PROXMOX_HOST }} << 'ENDSSH'
+            sudo cp /tmp/*.service /etc/systemd/system/
+            sudo systemctl daemon-reload
+            sudo systemctl restart spring-mvc-traditional || true
+            sudo systemctl restart spring-virtual-threads || true
+            sudo systemctl restart spring-webflux || true
+            sudo systemctl enable spring-mvc-traditional
+            sudo systemctl enable spring-virtual-threads
+            sudo systemctl enable spring-webflux
+          ENDSSH
+      
+      - name: Deploy with Docker Compose
+        if: ${{ secrets.PROXMOX_DEPLOY_METHOD == 'docker-compose' }}
+        run: |
+          # Copy docker-compose.yml and start services
+          scp -i ~/.ssh/proxmox_key docker-compose.yml \
+            ${{ secrets.PROXMOX_USER }}@${{ secrets.PROXMOX_HOST }}:/opt/spring-performance/
+          
+          ssh -i ~/.ssh/proxmox_key ${{ secrets.PROXMOX_USER }}@${{ secrets.PROXMOX_HOST }} << 'ENDSSH'
+            cd /opt/spring-performance
+            docker-compose down
+            docker-compose up -d
+          ENDSSH
+      
+      - name: Health check
+        run: |
+          # Wait for services to start
+          sleep 30
+          
+          # Check service health
+          ssh -i ~/.ssh/proxmox_key ${{ secrets.PROXMOX_USER }}@${{ secrets.PROXMOX_HOST }} << 'ENDSSH'
+            echo "Checking Spring MVC Traditional..."
+            curl -f http://localhost:8080/actuator/health || echo "Spring MVC Traditional not responding"
+            
+            echo "Checking Spring Virtual Threads..."
+            curl -f http://localhost:8081/actuator/health || echo "Spring Virtual Threads not responding"
+            
+            echo "Checking Spring WebFlux..."
+            curl -f http://localhost:8082/actuator/health || echo "Spring WebFlux not responding"
+          ENDSSH
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f ~/.ssh/proxmox_key
