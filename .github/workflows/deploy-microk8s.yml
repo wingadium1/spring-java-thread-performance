@@ -86,24 +86,26 @@ jobs:
             rm /tmp/*.tar
           ENDSSH
       
-      - name: Transfer Kubernetes manifests
-        run: |
-          # Create deployment directory on microk8s VM
-          ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} \
-            "mkdir -p ~/spring-performance-k8s"
-          
-          # Copy Kubernetes manifests
-          scp -i ~/.ssh/microk8s_key deployment/kubernetes/*.yaml \
-            ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }}:~/spring-performance-k8s/
-      
       - name: Deploy to microk8s
         run: |
+          # Create temp directory on microk8s VM
+          ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} \
+            "mkdir -p /tmp/k8s-deploy"
+          
+          # Copy fresh Kubernetes manifests
+          scp -i ~/.ssh/microk8s_key deployment/kubernetes/*.yaml \
+            ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }}:/tmp/k8s-deploy/
+          
           ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} << 'ENDSSH'
+            # Prepare deployment directory
+            rm -rf ~/spring-performance-k8s
+            mkdir -p ~/spring-performance-k8s
+            cp /tmp/k8s-deploy/*.yaml ~/spring-performance-k8s/
             cd ~/spring-performance-k8s
             
-            # Update image references to use local registry or imagePullPolicy
-            sed -i 's|image: spring-performance/|image: localhost:32000/spring-performance/|g' *.yaml
-            sed -i '/image:/a\        imagePullPolicy: IfNotPresent' *.yaml
+            # Update image references to use local images with IfNotPresent policy
+            sed -i 's|image: spring-performance/|image: localhost:32000/spring-performance/|g' spring-*.yaml
+            sed -i '/image: localhost:32000/a\        imagePullPolicy: IfNotPresent' spring-*.yaml
             
             # Apply Kubernetes manifests
             microk8s kubectl apply -f spring-mvc-traditional.yaml
@@ -117,6 +119,9 @@ jobs:
             microk8s kubectl wait --for=condition=available --timeout=300s deployment/spring-mvc-traditional
             microk8s kubectl wait --for=condition=available --timeout=300s deployment/spring-virtual-threads
             microk8s kubectl wait --for=condition=available --timeout=300s deployment/spring-webflux
+            
+            # Cleanup temp files
+            rm -rf /tmp/k8s-deploy
           ENDSSH
       
       - name: Verify deployment

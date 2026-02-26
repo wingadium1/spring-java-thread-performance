@@ -194,5 +194,5 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          rm -f ~/.ssh/proxmox_lxc_key ~/.ssh/microk8s_key
+          rm -f ~/.ssh/proxmox_lxc_key
           rm -rf /tmp/lxc-images
