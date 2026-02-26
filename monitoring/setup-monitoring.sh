@@ -110,9 +110,14 @@ if [ "$DEPLOY_NOW" = "y" ] || [ "$DEPLOY_NOW" = "Y" ]; then
   echo "🚀 Deploying monitoring stack..."
   
   # Set Grafana password
-  read -s -p "Enter Grafana admin password (default: admin123): " GRAFANA_PASSWORD
+  read -s -p "Enter Grafana admin password (minimum 8 characters): " GRAFANA_PASSWORD
   echo ""
-  GRAFANA_PASSWORD=${GRAFANA_PASSWORD:-admin123}
+  
+  # Validate password length
+  if [ ${#GRAFANA_PASSWORD} -lt 8 ]; then
+    echo "❌ Error: Password must be at least 8 characters"
+    exit 1
+  fi
   
   # Create Docker network
   docker network create monitoring 2>/dev/null || echo "Network already exists"

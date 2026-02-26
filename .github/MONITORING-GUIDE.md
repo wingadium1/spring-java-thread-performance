@@ -271,7 +271,7 @@ docker run -d \
   --restart unless-stopped \
   --network monitoring \
   -p 3000:3000 \
-  -e "GF_SECURITY_ADMIN_PASSWORD=admin123" \
+  -e "GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}" \
   -e "GF_USERS_ALLOW_SIGN_UP=false" \
   -v ~/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro \
   -v ~/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro \
@@ -294,7 +294,7 @@ curl http://localhost:3000/api/health
 
 # Access in browser
 # Prometheus: http://monitoring-host:9090
-# Grafana: http://monitoring-host:3000 (admin/admin123)
+# Grafana: http://monitoring-host:3000 (admin/your-password)
 ```
 
 ## Accessing Metrics from Containers
@@ -391,7 +391,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
@@ -415,6 +415,11 @@ networks:
 Deploy with:
 ```bash
 cd ~/monitoring
+
+# Set Grafana password as environment variable
+export GRAFANA_ADMIN_PASSWORD="YourSecurePassword123!"
+
+# Start services
 docker-compose up -d
 docker-compose ps
 ```

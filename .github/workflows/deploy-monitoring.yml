@@ -91,6 +91,10 @@ jobs:
           scp -i ~/.ssh/monitoring_key monitoring/grafana-datasource.yml \
             ${{ secrets.MONITORING_USER }}@${{ secrets.MONITORING_HOST }}:~/monitoring/grafana/provisioning/datasources/datasource.yml
           
+          # Copy Grafana dashboard provisioning config
+          scp -i ~/.ssh/monitoring_key monitoring/grafana-dashboard-provisioning.yml \
+            ${{ secrets.MONITORING_USER }}@${{ secrets.MONITORING_HOST }}:~/monitoring/grafana/provisioning/dashboards/dashboard.yml
+          
           # Copy Grafana dashboards if they exist
           if [ -d "monitoring/dashboards" ]; then
             scp -i ~/.ssh/monitoring_key monitoring/dashboards/*.json \
@@ -131,14 +135,6 @@ jobs:
             # Stop and remove existing Grafana container
             docker stop grafana 2>/dev/null || true
             docker rm grafana 2>/dev/null || true
-            
-            # Create Grafana configuration directory structure
-            mkdir -p grafana/provisioning/datasources
-            mkdir -p grafana/provisioning/dashboards
-            mkdir -p grafana/dashboards
-            
-            # Create dashboard provisioning config using printf
-            printf 'apiVersion: 1\n\nproviders:\n  - name: Spring Performance Dashboards\n    orgId: 1\n    folder: ""\n    type: file\n    disableDeletion: false\n    updateIntervalSeconds: 10\n    allowUiUpdates: true\n    options:\n      path: /var/lib/grafana/dashboards\n' > grafana/provisioning/dashboards/dashboard.yml
             
             # Start Grafana
             docker run -d \
