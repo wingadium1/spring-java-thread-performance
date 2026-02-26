@@ -143,6 +143,49 @@ ssh-copy-id -i ~/.ssh/microk8s_deploy.pub user@microk8s-vm
 cat ~/.ssh/microk8s_deploy  # Copy this output
 ```
 
+## Secrets for Monitoring Stack (Prometheus + Grafana)
+
+### MONITORING_HOST
+**Description**: IP or hostname of the monitoring host (separate from app containers)
+**Example**: `192.168.1.200`
+**Your Value**: 
+```
+<YOUR_MONITORING_HOST_IP>
+```
+
+### MONITORING_USER
+**Description**: SSH username for monitoring host
+**Example**: `ubuntu`
+**Your Value**:
+```
+<YOUR_MONITORING_SSH_USERNAME>
+```
+
+### MONITORING_SSH_KEY
+**Description**: SSH private key for monitoring host
+**Your Value**:
+```
+-----BEGIN OPENSSH PRIVATE KEY-----
+<YOUR_MONITORING_SSH_KEY>
+-----END OPENSSH PRIVATE KEY-----
+```
+
+**To generate:**
+```bash
+ssh-keygen -t ed25519 -C "github-actions-monitoring" -f ~/.ssh/monitoring_deploy
+ssh-copy-id -i ~/.ssh/monitoring_deploy.pub user@monitoring-host
+cat ~/.ssh/monitoring_deploy  # Copy this output
+```
+
+### GRAFANA_ADMIN_PASSWORD
+**Description**: Password for Grafana admin user
+**Example**: `SecurePassword123!`
+**Recommendation**: Use a strong password (12+ characters)
+**Your Value**:
+```
+<YOUR_GRAFANA_ADMIN_PASSWORD>
+```
+
 ## How to Add Secrets to GitHub
 
 1. Go to your repository Settings → Secrets and variables → Actions

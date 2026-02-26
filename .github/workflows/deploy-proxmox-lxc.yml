@@ -188,8 +188,49 @@ jobs:
               pct exec ${CTID} -- curl -f -s http://localhost:${PORT}/actuator/health > /dev/null \
                 && echo "✓ $APP is healthy" \
                 || echo "✗ $APP health check failed"
+              
+              # Verify Prometheus metrics endpoint
+              pct exec ${CTID} -- curl -f -s http://localhost:${PORT}/actuator/prometheus > /dev/null \
+                && echo "✓ $APP metrics endpoint is accessible" \
+                || echo "✗ $APP metrics endpoint failed"
             done
           ENDSSH
+      
+      - name: Display container IPs for monitoring setup
+        env:
+          PROXMOX_API_HOST: ${{ secrets.PROXMOX_API_HOST }}
+          PROXMOX_API_TOKEN_ID: ${{ secrets.PROXMOX_API_TOKEN_ID }}
+          PROXMOX_API_SECRET: ${{ secrets.PROXMOX_API_SECRET }}
+          PROXMOX_NODE: ${{ secrets.PROXMOX_NODE }}
+        run: |
+          echo ""
+          echo "=== Container IPs for Monitoring ==="
+          
+          # Function to call Proxmox API
+          call_proxmox_api() {
+            local method=$1
+            local endpoint=$2
+            curl -k -s -X "$method" \
+              -H "Authorization: PVEAPIToken=${PROXMOX_API_TOKEN_ID}=${PROXMOX_API_SECRET}" \
+              "https://${PROXMOX_API_HOST}:8006/api2/json${endpoint}"
+          }
+          
+          # Get and display container IPs
+          for CTID in 200 201 202; do
+            case $CTID in
+              200) APP="spring-mvc-traditional"; PORT=8080 ;;
+              201) APP="spring-virtual-threads"; PORT=8081 ;;
+              202) APP="spring-webflux"; PORT=8082 ;;
+            esac
+            
+            IP=$(call_proxmox_api GET "/nodes/${PROXMOX_NODE}/lxc/${CTID}/interfaces" | jq -r '.data[] | select(.name=="eth0") | .inet' | cut -d'/' -f1)
+            echo "$APP (CT $CTID): $IP:$PORT"
+            echo "  Metrics: http://$IP:$PORT/actuator/prometheus"
+          done
+          
+          echo ""
+          echo "Configure these IPs in your Prometheus configuration on the monitoring host."
+          echo "Then run the 'Deploy Monitoring Stack' workflow."
       
       - name: Cleanup
         if: always()

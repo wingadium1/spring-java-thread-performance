@@ -1,0 +1,170 @@
+{
+  "dashboard": {
+    "title": "Spring Boot Performance Comparison",
+    "tags": ["spring-boot", "performance", "comparison"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "Request Rate (req/s)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(http_server_requests_seconds_count{application=~\"spring.*\"}[1m])",
+            "legendFormat": "{{application}} - {{uri}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Requests/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "Response Time (p95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_server_requests_seconds_bucket{application=~\"spring.*\"}[1m]))",
+            "legendFormat": "{{application}} - {{uri}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Response Time"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "JVM Memory Usage",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "jvm_memory_used_bytes{application=~\"spring.*\", area=\"heap\"}",
+            "legendFormat": "{{application}} - Heap Used",
+            "refId": "A"
+          },
+          {
+            "expr": "jvm_memory_max_bytes{application=~\"spring.*\", area=\"heap\"}",
+            "legendFormat": "{{application}} - Heap Max",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "bytes", "label": "Memory"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "Thread Count",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "jvm_threads_live_threads{application=~\"spring.*\"}",
+            "legendFormat": "{{application}} - Live Threads",
+            "refId": "A"
+          },
+          {
+            "expr": "jvm_threads_daemon_threads{application=~\"spring.*\"}",
+            "legendFormat": "{{application}} - Daemon Threads",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Thread Count"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "CPU Usage",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "process_cpu_usage{application=~\"spring.*\"}",
+            "legendFormat": "{{application}} - CPU Usage",
+            "refId": "A"
+          },
+          {
+            "expr": "system_cpu_usage{application=~\"spring.*\"}",
+            "legendFormat": "{{application}} - System CPU",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "percentunit", "label": "CPU %", "max": 1},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "HTTP Error Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "rate(http_server_requests_seconds_count{application=~\"spring.*\", status=~\"5..\"}[1m])",
+            "legendFormat": "{{application}} - 5xx errors",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(http_server_requests_seconds_count{application=~\"spring.*\", status=~\"4..\"}[1m])",
+            "legendFormat": "{{application}} - 4xx errors",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Errors/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "GC Activity",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "rate(jvm_gc_pause_seconds_count{application=~\"spring.*\"}[1m])",
+            "legendFormat": "{{application}} - {{action}} - {{cause}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "GC Events/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "GC Pause Time (p95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(jvm_gc_pause_seconds_bucket{application=~\"spring.*\"}[1m]))",
+            "legendFormat": "{{application}} - p95",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Pause Time"},
+          {"format": "short"}
+        ]
+      }
+    ],
+    "refresh": "5s",
+    "time": {"from": "now-1h", "to": "now"},
+    "timepicker": {
+      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m"]
+    },
+    "templating": {
+      "list": []
+    },
+    "annotations": {
+      "list": []
+    },
+    "schemaVersion": 16,
+    "version": 0
+  }
+}

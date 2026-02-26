@@ -1,0 +1,66 @@
+# Prometheus configuration for LXC container deployment
+# This configuration expects containers to be accessible via their hostnames or IPs
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'proxmox-lxc'
+    environment: 'production'
+
+# Scrape configurations for Spring Boot applications in LXC containers
+scrape_configs:
+  # Spring MVC Traditional (Container ID: 200)
+  - job_name: 'spring-mvc-traditional'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['${CONTAINER_200_IP}:8080']
+        labels:
+          application: 'spring-mvc-traditional'
+          type: 'blocking-io'
+          container_id: '200'
+          deployment: 'lxc'
+
+  # Spring Virtual Threads (Container ID: 201)
+  - job_name: 'spring-virtual-threads'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['${CONTAINER_201_IP}:8081']
+        labels:
+          application: 'spring-virtual-threads'
+          type: 'virtual-threads'
+          container_id: '201'
+          deployment: 'lxc'
+
+  # Spring WebFlux (Container ID: 202)
+  - job_name: 'spring-webflux'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['${CONTAINER_202_IP}:8082']
+        labels:
+          application: 'spring-webflux'
+          type: 'reactive-nio'
+          container_id: '202'
+          deployment: 'lxc'
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          application: 'prometheus'
+          deployment: 'monitoring-host'
+
+  # Optional: Node Exporter for host metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: 
+        - '${CONTAINER_200_IP}:9100'
+        - '${CONTAINER_201_IP}:9100'
+        - '${CONTAINER_202_IP}:9100'
+        labels:
+          deployment: 'lxc'
+
+# Alert rules (optional)
+# rule_files:
+#   - 'alert.rules.yml'

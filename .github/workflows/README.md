@@ -47,7 +47,22 @@ Deploys to a microk8s cluster running on a Proxmox VM:
 
 **Documentation:** See [MICROK8S-GUIDE.md](../MICROK8S-GUIDE.md)
 
-### 4. CI - Build and Test (`ci.yml`)
+### 4. Deploy Monitoring Stack (`deploy-monitoring.yml`)
+
+Deploys Prometheus and Grafana to a separate monitoring host:
+
+**Features:**
+- Automatic container IP discovery from Proxmox API
+- Deploys Prometheus with auto-generated config
+- Deploys Grafana with datasource provisioning
+- Includes pre-configured dashboards
+- Verifies all targets are accessible
+
+**Triggers:** Push to `main`/`develop` (monitoring/** changes), Manual
+
+**Documentation:** See [MONITORING-GUIDE.md](../MONITORING-GUIDE.md)
+
+### 5. CI - Build and Test (`ci.yml`)
 
 Simple continuous integration for pull requests:
 
@@ -57,12 +72,14 @@ Simple continuous integration for pull requests:
 
 ## Choosing a Deployment Method
 
-| Method | Complexity | Overhead | Isolation | Best For |
-|--------|------------|----------|-----------|----------|
-| **VM + systemd** | Low | Medium | None | Simple deployments |
-| **VM + Docker** | Low | Low | Process | Quick container deploys |
-| **LXC Containers** | Medium | Very Low | OS-level | Multiple isolated apps |
-| **microk8s** | Medium | Medium | Pod-level | K8s learning/testing |
+| Method | Complexity | Overhead | Isolation | Monitoring | Best For |
+|--------|------------|----------|-----------|------------|----------|
+| **VM + systemd** | Low | Medium | None | External | Simple deployments |
+| **VM + Docker** | Low | Low | Process | External | Quick container deploys |
+| **LXC Containers** | Medium | Very Low | OS-level | External | Multiple isolated apps ⭐ |
+| **microk8s** | Medium | Medium | Pod-level | Built-in | K8s learning/testing |
+
+⭐ **Recommended**: LXC with external Prometheus/Grafana monitoring
 
 ## Required GitHub Secrets
 
@@ -94,6 +111,17 @@ Configure secrets based on your chosen deployment method:
 | `MICROK8S_HOST` | VM IP with microk8s | `192.168.1.150` |
 | `MICROK8S_USER` | SSH username | `ubuntu` |
 | `MICROK8S_SSH_KEY` | SSH private key | Contents of private key file |
+
+### For Monitoring Stack (`deploy-monitoring.yml`)
+
+| Secret Name | Description | Example |
+|-------------|-------------|---------|
+| `MONITORING_HOST` | Monitoring host IP/hostname | `192.168.1.200` |
+| `MONITORING_USER` | SSH username | `ubuntu` |
+| `MONITORING_SSH_KEY` | SSH private key | Contents of private key file |
+| `GRAFANA_ADMIN_PASSWORD` | Grafana admin password | `SecurePassword123!` |
+
+**Note**: Monitoring workflow also requires Proxmox API secrets to fetch container IPs.
 
 ### Setting up Secrets
 

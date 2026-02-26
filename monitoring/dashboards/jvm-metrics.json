@@ -1,0 +1,249 @@
+{
+  "dashboard": {
+    "title": "Spring Boot JVM Metrics",
+    "tags": ["spring-boot", "jvm", "performance"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "JVM Heap Memory",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "jvm_memory_used_bytes{application=~\"spring.*\", area=\"heap\"}",
+            "legendFormat": "{{application}} - Used",
+            "refId": "A"
+          },
+          {
+            "expr": "jvm_memory_committed_bytes{application=~\"spring.*\", area=\"heap\"}",
+            "legendFormat": "{{application}} - Committed",
+            "refId": "B"
+          },
+          {
+            "expr": "jvm_memory_max_bytes{application=~\"spring.*\", area=\"heap\"}",
+            "legendFormat": "{{application}} - Max",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "bytes", "label": "Memory"},
+          {"format": "short"}
+        ],
+        "fill": 1,
+        "linewidth": 2
+      },
+      {
+        "title": "JVM Non-Heap Memory",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "jvm_memory_used_bytes{application=~\"spring.*\", area=\"nonheap\"}",
+            "legendFormat": "{{application}} - Non-Heap Used",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "bytes", "label": "Memory"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "Thread States",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "jvm_threads_live_threads{application=~\"spring.*\"}",
+            "legendFormat": "{{application}} - Live",
+            "refId": "A"
+          },
+          {
+            "expr": "jvm_threads_daemon_threads{application=~\"spring.*\"}",
+            "legendFormat": "{{application}} - Daemon",
+            "refId": "B"
+          },
+          {
+            "expr": "jvm_threads_peak_threads{application=~\"spring.*\"}",
+            "legendFormat": "{{application}} - Peak",
+            "refId": "C"
+          },
+          {
+            "expr": "jvm_threads_states_threads{application=~\"spring.*\", state=\"runnable\"}",
+            "legendFormat": "{{application}} - Runnable",
+            "refId": "D"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Thread Count"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "Tomcat Thread Pool",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "tomcat_threads_current_threads{application=~\"spring-mvc.*|spring-virtual.*\"}",
+            "legendFormat": "{{application}} - Current",
+            "refId": "A"
+          },
+          {
+            "expr": "tomcat_threads_busy_threads{application=~\"spring-mvc.*|spring-virtual.*\"}",
+            "legendFormat": "{{application}} - Busy",
+            "refId": "B"
+          },
+          {
+            "expr": "tomcat_threads_config_max_threads{application=~\"spring-mvc.*|spring-virtual.*\"}",
+            "legendFormat": "{{application}} - Max",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Threads"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "GC Pause Duration (p95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(jvm_gc_pause_seconds_bucket{application=~\"spring.*\"}[1m]))",
+            "legendFormat": "{{application}} - {{action}} - p95",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Duration"},
+          {"format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [0.1], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "1m",
+          "handler": 1,
+          "name": "GC Pause alert",
+          "noDataState": "no_data"
+        }
+      },
+      {
+        "title": "GC Events Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "rate(jvm_gc_pause_seconds_count{application=~\"spring.*\"}[1m])",
+            "legendFormat": "{{application}} - {{action}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "GC Events/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "System CPU Load",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "system_cpu_usage{application=~\"spring.*\"}",
+            "legendFormat": "{{application}} - System CPU",
+            "refId": "A"
+          },
+          {
+            "expr": "process_cpu_usage{application=~\"spring.*\"}",
+            "legendFormat": "{{application}} - Process CPU",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "percentunit", "label": "CPU Usage", "max": 1},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "Class Loading",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "targets": [
+          {
+            "expr": "jvm_classes_loaded_classes{application=~\"spring.*\"}",
+            "legendFormat": "{{application}} - Loaded",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Classes"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "Buffer Pool Memory",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+        "targets": [
+          {
+            "expr": "jvm_buffer_memory_used_bytes{application=~\"spring.*\"}",
+            "legendFormat": "{{application}} - {{id}} - Used",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "bytes", "label": "Memory"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "Buffer Pool Count",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+        "targets": [
+          {
+            "expr": "jvm_buffer_count_buffers{application=~\"spring.*\"}",
+            "legendFormat": "{{application}} - {{id}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Buffer Count"},
+          {"format": "short"}
+        ]
+      }
+    ],
+    "refresh": "5s",
+    "time": {"from": "now-1h", "to": "now"},
+    "timepicker": {
+      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m"]
+    },
+    "templating": {
+      "list": [
+        {
+          "name": "application",
+          "type": "query",
+          "query": "label_values(application)",
+          "multi": true,
+          "includeAll": true,
+          "allValue": "spring.*"
+        }
+      ]
+    },
+    "annotations": {
+      "list": []
+    },
+    "schemaVersion": 16,
+    "version": 0
+  }
+}

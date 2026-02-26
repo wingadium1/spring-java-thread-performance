@@ -1,0 +1,212 @@
+name: Deploy Monitoring Stack (Prometheus + Grafana)
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'monitoring/**'
+      - '.github/workflows/deploy-monitoring.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-monitoring:
+    name: Deploy Prometheus and Grafana to Monitoring Host
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      actions: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up SSH to monitoring host
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.MONITORING_SSH_KEY }}" > ~/.ssh/monitoring_key
+          chmod 600 ~/.ssh/monitoring_key
+          ssh-keyscan -H ${{ secrets.MONITORING_HOST }} >> ~/.ssh/known_hosts
+      
+      - name: Get LXC container IPs from Proxmox
+        env:
+          PROXMOX_API_HOST: ${{ secrets.PROXMOX_API_HOST }}
+          PROXMOX_API_TOKEN_ID: ${{ secrets.PROXMOX_API_TOKEN_ID }}
+          PROXMOX_API_SECRET: ${{ secrets.PROXMOX_API_SECRET }}
+          PROXMOX_NODE: ${{ secrets.PROXMOX_NODE }}
+        run: |
+          # Function to call Proxmox API
+          call_proxmox_api() {
+            local method=$1
+            local endpoint=$2
+            
+            curl -k -s -X "$method" \
+              -H "Authorization: PVEAPIToken=${PROXMOX_API_TOKEN_ID}=${PROXMOX_API_SECRET}" \
+              "https://${PROXMOX_API_HOST}:8006/api2/json${endpoint}"
+          }
+          
+          # Get container IPs
+          echo "Fetching container IPs from Proxmox..."
+          
+          # Container 200 - Spring MVC Traditional
+          CONTAINER_200_IP=$(call_proxmox_api GET "/nodes/${PROXMOX_NODE}/lxc/200/interfaces" | jq -r '.data[] | select(.name=="eth0") | .inet' | cut -d'/' -f1)
+          echo "Container 200 IP: ${CONTAINER_200_IP}"
+          echo "CONTAINER_200_IP=${CONTAINER_200_IP}" >> $GITHUB_ENV
+          
+          # Container 201 - Spring Virtual Threads
+          CONTAINER_201_IP=$(call_proxmox_api GET "/nodes/${PROXMOX_NODE}/lxc/201/interfaces" | jq -r '.data[] | select(.name=="eth0") | .inet' | cut -d'/' -f1)
+          echo "Container 201 IP: ${CONTAINER_201_IP}"
+          echo "CONTAINER_201_IP=${CONTAINER_201_IP}" >> $GITHUB_ENV
+          
+          # Container 202 - Spring WebFlux
+          CONTAINER_202_IP=$(call_proxmox_api GET "/nodes/${PROXMOX_NODE}/lxc/202/interfaces" | jq -r '.data[] | select(.name=="eth0") | .inet' | cut -d'/' -f1)
+          echo "Container 202 IP: ${CONTAINER_202_IP}"
+          echo "CONTAINER_202_IP=${CONTAINER_202_IP}" >> $GITHUB_ENV
+      
+      - name: Prepare Prometheus configuration
+        run: |
+          # Create prometheus config with actual IPs
+          cp monitoring/prometheus-lxc.yml /tmp/prometheus.yml
+          
+          # Replace IP placeholders with actual IPs
+          sed -i "s/\${CONTAINER_200_IP}/${{ env.CONTAINER_200_IP }}/g" /tmp/prometheus.yml
+          sed -i "s/\${CONTAINER_201_IP}/${{ env.CONTAINER_201_IP }}/g" /tmp/prometheus.yml
+          sed -i "s/\${CONTAINER_202_IP}/${{ env.CONTAINER_202_IP }}/g" /tmp/prometheus.yml
+          
+          echo "Generated Prometheus configuration:"
+          cat /tmp/prometheus.yml
+      
+      - name: Transfer monitoring configuration
+        run: |
+          # Create monitoring directory on monitoring host
+          ssh -i ~/.ssh/monitoring_key ${{ secrets.MONITORING_USER }}@${{ secrets.MONITORING_HOST }} \
+            "mkdir -p ~/monitoring/{prometheus,grafana/provisioning/datasources,grafana/provisioning/dashboards,grafana/dashboards}"
+          
+          # Copy Prometheus configuration
+          scp -i ~/.ssh/monitoring_key /tmp/prometheus.yml \
+            ${{ secrets.MONITORING_USER }}@${{ secrets.MONITORING_HOST }}:~/monitoring/prometheus/prometheus.yml
+          
+          # Copy Grafana datasource configuration
+          scp -i ~/.ssh/monitoring_key monitoring/grafana-datasource.yml \
+            ${{ secrets.MONITORING_USER }}@${{ secrets.MONITORING_HOST }}:~/monitoring/grafana/provisioning/datasources/datasource.yml
+          
+          # Copy Grafana dashboards if they exist
+          if [ -d "monitoring/dashboards" ]; then
+            scp -i ~/.ssh/monitoring_key monitoring/dashboards/*.json \
+              ${{ secrets.MONITORING_USER }}@${{ secrets.MONITORING_HOST }}:~/monitoring/grafana/dashboards/ || true
+          fi
+      
+      - name: Deploy Prometheus with Docker
+        run: |
+          ssh -i ~/.ssh/monitoring_key ${{ secrets.MONITORING_USER }}@${{ secrets.MONITORING_HOST }} << 'ENDSSH'
+            cd ~/monitoring
+            
+            # Stop and remove existing Prometheus container
+            docker stop prometheus 2>/dev/null || true
+            docker rm prometheus 2>/dev/null || true
+            
+            # Start Prometheus
+            docker run -d \
+              --name prometheus \
+              --restart unless-stopped \
+              -p 9090:9090 \
+              -v ~/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro \
+              prom/prometheus:latest \
+              --config.file=/etc/prometheus/prometheus.yml \
+              --storage.tsdb.path=/prometheus \
+              --web.console.libraries=/usr/share/prometheus/console_libraries \
+              --web.console.templates=/usr/share/prometheus/consoles \
+              --web.enable-lifecycle
+            
+            echo "Prometheus started successfully"
+            docker ps | grep prometheus
+          ENDSSH
+      
+      - name: Deploy Grafana with Docker
+        run: |
+          ssh -i ~/.ssh/monitoring_key ${{ secrets.MONITORING_USER }}@${{ secrets.MONITORING_HOST }} << 'ENDSSH'
+            cd ~/monitoring
+            
+            # Stop and remove existing Grafana container
+            docker stop grafana 2>/dev/null || true
+            docker rm grafana 2>/dev/null || true
+            
+            # Create Grafana configuration directory structure
+            mkdir -p grafana/provisioning/datasources
+            mkdir -p grafana/provisioning/dashboards
+            mkdir -p grafana/dashboards
+            
+            # Create dashboard provisioning config using printf
+            printf 'apiVersion: 1\n\nproviders:\n  - name: Spring Performance Dashboards\n    orgId: 1\n    folder: ""\n    type: file\n    disableDeletion: false\n    updateIntervalSeconds: 10\n    allowUiUpdates: true\n    options:\n      path: /var/lib/grafana/dashboards\n' > grafana/provisioning/dashboards/dashboard.yml
+            
+            # Start Grafana
+            docker run -d \
+              --name grafana \
+              --restart unless-stopped \
+              -p 3000:3000 \
+              -e "GF_SECURITY_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}" \
+              -e "GF_USERS_ALLOW_SIGN_UP=false" \
+              -e "GF_SERVER_ROOT_URL=http://${{ secrets.MONITORING_HOST }}:3000" \
+              -v ~/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro \
+              -v ~/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro \
+              -v ~/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro \
+              grafana/grafana:latest
+            
+            echo "Grafana started successfully"
+            docker ps | grep grafana
+          ENDSSH
+      
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for Prometheus to be ready..."
+          for i in {1..30}; do
+            if ssh -i ~/.ssh/monitoring_key ${{ secrets.MONITORING_USER }}@${{ secrets.MONITORING_HOST }} \
+              "curl -s http://localhost:9090/-/ready" | grep -q "Prometheus Server is Ready"; then
+              echo "✓ Prometheus is ready"
+              break
+            fi
+            sleep 2
+          done
+          
+          echo "Waiting for Grafana to be ready..."
+          for i in {1..30}; do
+            if ssh -i ~/.ssh/monitoring_key ${{ secrets.MONITORING_USER }}@${{ secrets.MONITORING_HOST }} \
+              "curl -s http://localhost:3000/api/health" | grep -q "ok"; then
+              echo "✓ Grafana is ready"
+              break
+            fi
+            sleep 2
+          done
+      
+      - name: Verify Prometheus targets
+        run: |
+          ssh -i ~/.ssh/monitoring_key ${{ secrets.MONITORING_USER }}@${{ secrets.MONITORING_HOST }} << 'ENDSSH'
+            echo "=== Prometheus Targets Status ==="
+            curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job: .labels.job, health: .health, lastError: .lastError}'
+          ENDSSH
+      
+      - name: Display access information
+        run: |
+          echo ""
+          echo "============================================"
+          echo "   Monitoring Stack Deployed Successfully"
+          echo "============================================"
+          echo ""
+          echo "Prometheus: http://${{ secrets.MONITORING_HOST }}:9090"
+          echo "Grafana:    http://${{ secrets.MONITORING_HOST }}:3000"
+          echo ""
+          echo "Grafana Login:"
+          echo "  Username: admin"
+          echo "  Password: (configured in GRAFANA_ADMIN_PASSWORD secret)"
+          echo ""
+          echo "Container Targets:"
+          echo "  - spring-mvc-traditional: ${{ env.CONTAINER_200_IP }}:8080"
+          echo "  - spring-virtual-threads: ${{ env.CONTAINER_201_IP }}:8081"
+          echo "  - spring-webflux: ${{ env.CONTAINER_202_IP }}:8082"
+          echo ""
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f ~/.ssh/monitoring_key /tmp/prometheus.yml

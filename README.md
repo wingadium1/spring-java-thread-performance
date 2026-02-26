@@ -411,15 +411,18 @@ This project uses GitHub Actions with self-hosted runners for automated build an
 
 ### Deployment Options:
 1. **Proxmox VM** - Traditional VM deployment with SSH
-2. **Proxmox LXC** - Lightweight containers created via Proxmox API
+2. **Proxmox LXC** - Lightweight containers created via Proxmox API ⭐ **Recommended**
 3. **microk8s** - Kubernetes deployment on Proxmox VM
+4. **Monitoring Stack** - Prometheus + Grafana on separate host
 
 ### Documentation:
 - **[.github/workflows/README.md](.github/workflows/README.md)** - All workflows overview
 - **[.github/PROXMOX-SETUP.md](.github/PROXMOX-SETUP.md)** - Proxmox VM deployment guide
 - **[.github/PROXMOX-LXC-GUIDE.md](.github/PROXMOX-LXC-GUIDE.md)** - Proxmox LXC container guide
 - **[.github/MICROK8S-GUIDE.md](.github/MICROK8S-GUIDE.md)** - microk8s deployment guide
+- **[.github/MONITORING-GUIDE.md](.github/MONITORING-GUIDE.md)** - Prometheus/Grafana monitoring setup
 - **[.github/SECRETS-TEMPLATE.md](.github/SECRETS-TEMPLATE.md)** - GitHub Secrets configuration
+- **[monitoring/README.md](monitoring/README.md)** - Monitoring configuration files
 
 ## Additional Documentation
 
