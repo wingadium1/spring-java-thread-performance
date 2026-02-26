@@ -1,5 +1,8 @@
 # Spring Boot Thread Performance Comparison
 
+[![Build and Deploy](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/build-and-deploy.yml/badge.svg)](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/build-and-deploy.yml)
+[![CI](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/ci.yml/badge.svg)](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/ci.yml)
+
 A comprehensive performance comparison project for different Spring Boot threading models:
 - **Traditional Spring MVC** (Servlet: Tomcat, Blocking I/O)
 - **Spring Boot with Virtual Threads** (Java 21)
@@ -401,6 +404,14 @@ backend spring_backend
 - **Resource Usage**: CPU, Memory, Thread count
 - **Concurrency**: Maximum concurrent requests handled
 - **Errors**: Error rate under load
+
+## CI/CD and Deployment
+
+This project uses GitHub Actions with self-hosted runners for automated build and deployment to Proxmox servers.
+
+- **[.github/workflows/README.md](.github/workflows/README.md)** - GitHub Actions workflows documentation
+- **[.github/PROXMOX-SETUP.md](.github/PROXMOX-SETUP.md)** - Complete Proxmox deployment setup guide
+- **[.github/SECRETS-TEMPLATE.md](.github/SECRETS-TEMPLATE.md)** - GitHub Secrets configuration template
 
 ## Additional Documentation
 
