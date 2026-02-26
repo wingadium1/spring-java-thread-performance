@@ -129,6 +129,15 @@ jobs:
       
       - name: Deploy Grafana with Docker
         run: |
+          # Create env file securely on monitoring host
+          ssh -i ~/.ssh/monitoring_key ${{ secrets.MONITORING_USER }}@${{ secrets.MONITORING_HOST }} \
+            "cd ~/monitoring && \
+             echo 'GF_SECURITY_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}' > .grafana.env && \
+             echo 'GF_USERS_ALLOW_SIGN_UP=false' >> .grafana.env && \
+             echo 'GF_SERVER_ROOT_URL=http://${{ secrets.MONITORING_HOST }}:3000' >> .grafana.env && \
+             chmod 600 .grafana.env"
+          
+          # Deploy Grafana using env file
           ssh -i ~/.ssh/monitoring_key ${{ secrets.MONITORING_USER }}@${{ secrets.MONITORING_HOST }} << 'ENDSSH'
             cd ~/monitoring
             
@@ -136,18 +145,19 @@ jobs:
             docker stop grafana 2>/dev/null || true
             docker rm grafana 2>/dev/null || true
             
-            # Start Grafana
+            # Start Grafana with env file (more secure than -e flags)
             docker run -d \
               --name grafana \
               --restart unless-stopped \
               -p 3000:3000 \
-              -e "GF_SECURITY_ADMIN_PASSWORD=${{ secrets.GRAFANA_ADMIN_PASSWORD }}" \
-              -e "GF_USERS_ALLOW_SIGN_UP=false" \
-              -e "GF_SERVER_ROOT_URL=http://${{ secrets.MONITORING_HOST }}:3000" \
+              --env-file .grafana.env \
               -v ~/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro \
               -v ~/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro \
               -v ~/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro \
               grafana/grafana:latest
+            
+            # Remove env file after container starts for security
+            rm -f .grafana.env
             
             echo "Grafana started successfully"
             docker ps | grep grafana

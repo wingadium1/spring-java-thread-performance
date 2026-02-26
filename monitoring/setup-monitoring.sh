@@ -176,7 +176,7 @@ if [ "$DEPLOY_NOW" = "y" ] || [ "$DEPLOY_NOW" = "Y" ]; then
   if curl -s http://localhost:3000/api/health | grep -q "ok"; then
     echo "✓ Grafana is ready: http://localhost:3000"
     echo "  Username: admin"
-    echo "  Password: ${GRAFANA_PASSWORD}"
+    echo "  Password: (the password you just entered)"
   else
     echo "⚠️  Grafana may not be ready yet. Check with: docker logs grafana"
   fi
@@ -192,7 +192,7 @@ if [ "$DEPLOY_NOW" = "y" ] || [ "$DEPLOY_NOW" = "Y" ]; then
   echo ""
   echo "Next Steps:"
   echo "1. Open Grafana in your browser"
-  echo "2. Login with admin/${GRAFANA_PASSWORD}"
+  echo "2. Login with admin and the password you configured"
   echo "3. Import dashboards from monitoring/dashboards/"
   echo "4. Check Prometheus targets: http://localhost:9090/targets"
   echo ""
