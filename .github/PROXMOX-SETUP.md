@@ -179,6 +179,29 @@ sudo ./svc.sh restart
 
 ## Verification
 
+### Test Deployment Locally (Before GitHub Actions)
+
+You can test the deployment locally before setting up GitHub Actions:
+
+```bash
+# Set environment variables
+export PROXMOX_HOST=192.168.1.100
+export PROXMOX_USER=ubuntu
+export PROXMOX_SSH_KEY_PATH=~/.ssh/proxmox_deploy
+export PROXMOX_DEPLOY_METHOD=systemd  # or docker or docker-compose
+
+# Run the test deployment script
+./.github/test-deployment.sh
+```
+
+This script will:
+- Verify SSH connection
+- Build the project
+- Deploy to Proxmox
+- Run health checks
+
+### Test via GitHub Actions
+
 After setup, verify the workflow:
 
 1. Push a commit to `main` or `develop` branch
