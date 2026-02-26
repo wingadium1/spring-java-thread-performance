@@ -28,6 +28,8 @@
         <spring-boot.version>3.2.1</spring-boot.version>
         
         <!-- Docker image configuration -->
+        <!-- docker.registry: Registry URL prefix (e.g., 'ghcr.io/' for GitHub Container Registry) -->
+        <!-- Leave empty for local builds without registry prefix -->
         <docker.registry></docker.registry>
         <docker.image.prefix>spring-performance</docker.image.prefix>
     </properties>
