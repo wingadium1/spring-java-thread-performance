@@ -407,11 +407,19 @@ backend spring_backend
 
 ## CI/CD and Deployment
 
-This project uses GitHub Actions with self-hosted runners for automated build and deployment to Proxmox servers.
+This project uses GitHub Actions with self-hosted runners for automated build and deployment with multiple deployment options:
 
-- **[.github/workflows/README.md](.github/workflows/README.md)** - GitHub Actions workflows documentation
-- **[.github/PROXMOX-SETUP.md](.github/PROXMOX-SETUP.md)** - Complete Proxmox deployment setup guide
-- **[.github/SECRETS-TEMPLATE.md](.github/SECRETS-TEMPLATE.md)** - GitHub Secrets configuration template
+### Deployment Options:
+1. **Proxmox VM** - Traditional VM deployment with SSH
+2. **Proxmox LXC** - Lightweight containers created via Proxmox API
+3. **microk8s** - Kubernetes deployment on Proxmox VM
+
+### Documentation:
+- **[.github/workflows/README.md](.github/workflows/README.md)** - All workflows overview
+- **[.github/PROXMOX-SETUP.md](.github/PROXMOX-SETUP.md)** - Proxmox VM deployment guide
+- **[.github/PROXMOX-LXC-GUIDE.md](.github/PROXMOX-LXC-GUIDE.md)** - Proxmox LXC container guide
+- **[.github/MICROK8S-GUIDE.md](.github/MICROK8S-GUIDE.md)** - microk8s deployment guide
+- **[.github/SECRETS-TEMPLATE.md](.github/SECRETS-TEMPLATE.md)** - GitHub Secrets configuration
 
 ## Additional Documentation
 

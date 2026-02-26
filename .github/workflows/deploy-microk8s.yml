@@ -1,0 +1,176 @@
+name: Deploy to microk8s
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+jobs:
+  deploy-microk8s:
+    name: Deploy to microk8s on Proxmox VM
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      actions: read
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+      
+      - name: Build with Maven
+        run: mvn clean package -DskipTests
+      
+      - name: Build and push Docker images to microk8s registry
+        run: |
+          # Build Docker images
+          mvn jib:dockerBuild
+          
+          # Tag images for microk8s registry
+          docker tag spring-performance/spring-mvc-traditional:latest localhost:32000/spring-performance/spring-mvc-traditional:latest
+          docker tag spring-performance/spring-virtual-threads:latest localhost:32000/spring-performance/spring-virtual-threads:latest
+          docker tag spring-performance/spring-webflux:latest localhost:32000/spring-performance/spring-webflux:latest
+      
+      - name: Set up SSH to microk8s VM
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.MICROK8S_SSH_KEY }}" > ~/.ssh/microk8s_key
+          chmod 600 ~/.ssh/microk8s_key
+          ssh-keyscan -H ${{ secrets.MICROK8S_HOST }} >> ~/.ssh/known_hosts
+      
+      - name: Save and transfer Docker images to microk8s VM
+        run: |
+          # Save Docker images
+          mkdir -p /tmp/k8s-images
+          docker save spring-performance/spring-mvc-traditional:latest -o /tmp/k8s-images/spring-mvc-traditional.tar
+          docker save spring-performance/spring-virtual-threads:latest -o /tmp/k8s-images/spring-virtual-threads.tar
+          docker save spring-performance/spring-webflux:latest -o /tmp/k8s-images/spring-webflux.tar
+          
+          # Transfer images to microk8s VM
+          scp -i ~/.ssh/microk8s_key /tmp/k8s-images/*.tar \
+            ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }}:/tmp/
+          
+          # Cleanup local images
+          rm -rf /tmp/k8s-images
+      
+      - name: Load images into microk8s
+        run: |
+          ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} << 'ENDSSH'
+            # Import images into microk8s
+            microk8s ctr image import /tmp/spring-mvc-traditional.tar
+            microk8s ctr image import /tmp/spring-virtual-threads.tar
+            microk8s ctr image import /tmp/spring-webflux.tar
+            
+            # Tag images for local registry
+            microk8s ctr images tag docker.io/spring-performance/spring-mvc-traditional:latest localhost:32000/spring-performance/spring-mvc-traditional:latest
+            microk8s ctr images tag docker.io/spring-performance/spring-virtual-threads:latest localhost:32000/spring-performance/spring-virtual-threads:latest
+            microk8s ctr images tag docker.io/spring-performance/spring-webflux:latest localhost:32000/spring-performance/spring-webflux:latest
+            
+            # Push to microk8s registry (if registry is enabled)
+            if microk8s status | grep -q "registry.*enabled"; then
+              microk8s ctr images push localhost:32000/spring-performance/spring-mvc-traditional:latest --plain-http
+              microk8s ctr images push localhost:32000/spring-performance/spring-virtual-threads:latest --plain-http
+              microk8s ctr images push localhost:32000/spring-performance/spring-webflux:latest --plain-http
+            fi
+            
+            # Cleanup tar files
+            rm /tmp/*.tar
+          ENDSSH
+      
+      - name: Transfer Kubernetes manifests
+        run: |
+          # Create deployment directory on microk8s VM
+          ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} \
+            "mkdir -p ~/spring-performance-k8s"
+          
+          # Copy Kubernetes manifests
+          scp -i ~/.ssh/microk8s_key deployment/kubernetes/*.yaml \
+            ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }}:~/spring-performance-k8s/
+      
+      - name: Deploy to microk8s
+        run: |
+          ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} << 'ENDSSH'
+            cd ~/spring-performance-k8s
+            
+            # Update image references to use local registry or imagePullPolicy
+            sed -i 's|image: spring-performance/|image: localhost:32000/spring-performance/|g' *.yaml
+            sed -i '/image:/a\        imagePullPolicy: IfNotPresent' *.yaml
+            
+            # Apply Kubernetes manifests
+            microk8s kubectl apply -f spring-mvc-traditional.yaml
+            microk8s kubectl apply -f spring-virtual-threads.yaml
+            microk8s kubectl apply -f spring-webflux.yaml
+            
+            # Apply ingress if needed (uncomment if you want ingress)
+            # microk8s kubectl apply -f ingress.yaml
+            
+            echo "Waiting for deployments to be ready..."
+            microk8s kubectl wait --for=condition=available --timeout=300s deployment/spring-mvc-traditional
+            microk8s kubectl wait --for=condition=available --timeout=300s deployment/spring-virtual-threads
+            microk8s kubectl wait --for=condition=available --timeout=300s deployment/spring-webflux
+          ENDSSH
+      
+      - name: Verify deployment
+        run: |
+          ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} << 'ENDSSH'
+            echo "=== Deployments ==="
+            microk8s kubectl get deployments
+            
+            echo ""
+            echo "=== Pods ==="
+            microk8s kubectl get pods
+            
+            echo ""
+            echo "=== Services ==="
+            microk8s kubectl get services
+            
+            echo ""
+            echo "=== Health Checks ==="
+            # Get service cluster IPs and test health
+            for app in spring-mvc-traditional spring-virtual-threads spring-webflux; do
+              POD=$(microk8s kubectl get pod -l app=$app -o jsonpath='{.items[0].metadata.name}')
+              if [ -n "$POD" ]; then
+                echo "Testing $app..."
+                microk8s kubectl exec $POD -- curl -f -s http://localhost:8080/actuator/health > /dev/null && echo "✓ $app is healthy" || echo "✗ $app health check failed"
+              fi
+            done
+          ENDSSH
+      
+      - name: Display access information
+        run: |
+          ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} << 'ENDSSH'
+            echo ""
+            echo "=== Access Information ==="
+            echo "To access services from your local machine:"
+            echo ""
+            
+            # Get NodePort if services are NodePort type
+            MVC_PORT=$(microk8s kubectl get service spring-mvc-traditional -o jsonpath='{.spec.ports[0].nodePort}')
+            VIRTUAL_PORT=$(microk8s kubectl get service spring-virtual-threads -o jsonpath='{.spec.ports[0].nodePort}')
+            WEBFLUX_PORT=$(microk8s kubectl get service spring-webflux -o jsonpath='{.spec.ports[0].nodePort}')
+            
+            if [ -n "$MVC_PORT" ]; then
+              echo "Spring MVC Traditional: http://$(hostname -I | awk '{print $1}'):$MVC_PORT"
+              echo "Spring Virtual Threads: http://$(hostname -I | awk '{print $1}'):$VIRTUAL_PORT"
+              echo "Spring WebFlux: http://$(hostname -I | awk '{print $1}'):$WEBFLUX_PORT"
+            else
+              echo "Services are ClusterIP type. Use port-forwarding:"
+              echo "  microk8s kubectl port-forward service/spring-mvc-traditional 8080:8080"
+              echo "  microk8s kubectl port-forward service/spring-virtual-threads 8081:8081"
+              echo "  microk8s kubectl port-forward service/spring-webflux 8082:8082"
+            fi
+          ENDSSH
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f ~/.ssh/microk8s_key

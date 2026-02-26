@@ -2,35 +2,98 @@
 
 ## Overview
 
-This repository uses GitHub Actions with self-hosted runners to build and deploy Spring Boot applications to a Proxmox server.
+This repository uses GitHub Actions with self-hosted runners to build and deploy Spring Boot applications using multiple deployment strategies.
 
-## Workflows
+## Available Workflows
 
-### Build and Deploy to Proxmox (`build-and-deploy.yml`)
+### 1. Build and Deploy to Proxmox VM (`build-and-deploy.yml`)
 
-This workflow:
-1. Builds all Spring Boot modules using Maven
-2. Runs tests
-3. Creates Docker images using Jib
-4. Deploys to Proxmox server using SSH
+Deploys to a Proxmox VM using SSH with three deployment methods:
 
-**Triggers:**
-- Push to `main` or `develop` branches
-- Pull requests to `main` or `develop` branches
-- Manual workflow dispatch
+**Methods:**
+- **systemd** - JAR files managed as Linux services
+- **docker** - Individual Docker containers
+- **docker-compose** - Full stack with monitoring
+
+**Triggers:** Push to `main`/`develop`, Pull Requests, Manual
+
+**Documentation:** See [PROXMOX-SETUP.md](../PROXMOX-SETUP.md)
+
+### 2. Deploy to Proxmox LXC Containers (`deploy-proxmox-lxc.yml`)
+
+Creates and manages LXC containers directly on Proxmox using the Proxmox API:
+
+**Features:**
+- Automatic container creation via Proxmox API
+- Each app gets its own isolated container
+- Systemd service management
+- Resource allocation per container
+
+**Triggers:** Push to `main`/`develop`, Manual
+
+**Documentation:** See [PROXMOX-LXC-GUIDE.md](../PROXMOX-LXC-GUIDE.md)
+
+### 3. Deploy to microk8s (`deploy-microk8s.yml`)
+
+Deploys to a microk8s cluster running on a Proxmox VM:
+
+**Features:**
+- Kubernetes-native deployment
+- Uses existing Kubernetes manifests
+- Automatic image import to microk8s
+- Service scaling and self-healing
+
+**Triggers:** Push to `main`/`develop`, Manual
+
+**Documentation:** See [MICROK8S-GUIDE.md](../MICROK8S-GUIDE.md)
+
+### 4. CI - Build and Test (`ci.yml`)
+
+Simple continuous integration for pull requests:
+
+**Actions:** Build with Maven, Run tests
+
+**Triggers:** Pull Requests, Manual
+
+## Choosing a Deployment Method
+
+| Method | Complexity | Overhead | Isolation | Best For |
+|--------|------------|----------|-----------|----------|
+| **VM + systemd** | Low | Medium | None | Simple deployments |
+| **VM + Docker** | Low | Low | Process | Quick container deploys |
+| **LXC Containers** | Medium | Very Low | OS-level | Multiple isolated apps |
+| **microk8s** | Medium | Medium | Pod-level | K8s learning/testing |
 
 ## Required GitHub Secrets
 
-To use this workflow, configure the following secrets in your GitHub repository settings (Settings → Secrets and variables → Actions):
+Configure secrets based on your chosen deployment method:
 
-### Proxmox Server Authentication
+### For VM Deployment (`build-and-deploy.yml`)
 
 | Secret Name | Description | Example |
 |-------------|-------------|---------|
-| `PROXMOX_HOST` | IP address or hostname of Proxmox server | `192.168.1.100` or `proxmox.example.com` |
-| `PROXMOX_USER` | SSH username for Proxmox server | `deploy` or `ubuntu` |
-| `PROXMOX_SSH_KEY` | Private SSH key for authentication | Contents of your private key file |
-| `PROXMOX_DEPLOY_METHOD` | Deployment method (optional) | `systemd`, `docker`, or `docker-compose` |
+| `PROXMOX_HOST` | VM IP or hostname | `192.168.1.100` |
+| `PROXMOX_USER` | SSH username | `ubuntu` |
+| `PROXMOX_SSH_KEY` | SSH private key | Contents of private key file |
+| `PROXMOX_DEPLOY_METHOD` | Deployment method | `systemd`, `docker`, or `docker-compose` |
+
+### For LXC Container Deployment (`deploy-proxmox-lxc.yml`)
+
+| Secret Name | Description | Example |
+|-------------|-------------|---------|
+| `PROXMOX_API_HOST` | Proxmox server IP/hostname | `192.168.1.100` |
+| `PROXMOX_API_TOKEN_ID` | API Token ID | `root@pam!github-actions` |
+| `PROXMOX_API_SECRET` | API Token Secret | `xxxxxxxx-xxxx-xxxx...` |
+| `PROXMOX_NODE` | Proxmox node name | `pve` or `proxmox1` |
+| `PROXMOX_SSH_KEY` | SSH private key for root | Contents of private key file |
+
+### For microk8s Deployment (`deploy-microk8s.yml`)
+
+| Secret Name | Description | Example |
+|-------------|-------------|---------|
+| `MICROK8S_HOST` | VM IP with microk8s | `192.168.1.150` |
+| `MICROK8S_USER` | SSH username | `ubuntu` |
+| `MICROK8S_SSH_KEY` | SSH private key | Contents of private key file |
 
 ### Setting up Secrets
 
