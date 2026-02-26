@@ -65,7 +65,9 @@ cat ~/.ssh/proxmox_deploy
 
 ### 3. Configure GitHub Secrets
 
-1. Go to your GitHub repository: https://github.com/wingadium1/spring-java-thread-performance
+1. Go to your GitHub repository Settings → Secrets and variables → Actions
+   - URL format: `https://github.com/YOUR_USERNAME/YOUR_REPO/settings/secrets/actions`
+   - For this repo: `https://github.com/wingadium1/spring-java-thread-performance/settings/secrets/actions`
 2. Navigate to **Settings** → **Secrets and variables** → **Actions**
 3. Click **New repository secret** and add these secrets:
 
@@ -93,7 +95,8 @@ curl -o actions-runner-linux-x64-2.XXX.X.tar.gz -L https://github.com/actions/ru
 tar xzf ./actions-runner-linux-x64-2.XXX.X.tar.gz
 
 # Configure the runner (use the token provided by GitHub)
-./config.sh --url https://github.com/wingadium1/spring-java-thread-performance --token YOUR_TOKEN
+./config.sh --url https://github.com/YOUR_USERNAME/YOUR_REPO --token YOUR_TOKEN
+# For this repo: ./config.sh --url https://github.com/wingadium1/spring-java-thread-performance --token YOUR_TOKEN
 
 # Install as a service (optional but recommended)
 sudo ./svc.sh install

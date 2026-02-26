@@ -46,7 +46,9 @@ systemd
 
 ## How to Add Secrets to GitHub
 
-1. Go to https://github.com/wingadium1/spring-java-thread-performance/settings/secrets/actions
+1. Go to your repository Settings → Secrets and variables → Actions
+   - URL format: `https://github.com/YOUR_USERNAME/YOUR_REPO/settings/secrets/actions`
+   - For this repo: `https://github.com/wingadium1/spring-java-thread-performance/settings/secrets/actions`
 2. Click "New repository secret"
 3. Enter the secret name (e.g., `PROXMOX_HOST`)
 4. Paste the value
