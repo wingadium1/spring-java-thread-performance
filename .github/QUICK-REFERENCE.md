@@ -6,23 +6,20 @@ This document provides a quick reference for the GitHub Actions setup with self-
 
 ### 1. GitHub Actions Workflows
 
-#### Build and Deploy Workflow (`.github/workflows/build-and-deploy.yml`)
-- **Triggers**: Push to `main`/`develop`, Pull Requests, Manual
-- **Jobs**:
-  - **Build**: Compiles Java, runs tests, creates Docker images
-  - **Deploy**: Deploys to Proxmox server using SSH
-
 #### CI Workflow (`.github/workflows/ci.yml`)
-- **Triggers**: Pull Requests, Manual
-- **Jobs**: Build and test only (no deployment)
+- **Triggers**: Push to `main`/`develop`, Pull Requests, Manual
+- **Jobs**: Build and test only (deployment gate)
+
+#### Deploy Workflows
+- **`.github/workflows/deploy-microk8s.yml`**: Auto-triggered after successful CI (or manual)
+- **`.github/workflows/deploy-proxmox-lxc.yml`**: Auto-triggered after successful CI (or manual)
 
 ### 2. Deployment Methods Supported
 
 | Method | Description | When to Use |
 |--------|-------------|-------------|
-| **systemd** | JAR files managed as systemd services | Simple VM deployments, traditional approach |
-| **docker** | Individual Docker containers | Container-based, easy rollback |
-| **docker-compose** | Full stack with monitoring | Complete deployment with Prometheus/Grafana |
+| **micro-k8s** | Deploy to microk8s cluster on VM | Kubernetes-based deployment |
+| **proxmox-lxc** | Deploy to dedicated Proxmox LXC containers | Isolated VM/container-style deployment |
 
 ### 3. Security Features
 
@@ -36,17 +33,14 @@ This document provides a quick reference for the GitHub Actions setup with self-
 
 ### Step 1: Set Up Proxmox Server
 
-Choose your deployment method and prepare the server:
+Choose your deployment method and prepare the target environment:
 
 ```bash
-# For systemd deployment:
-sudo apt update && sudo apt install -y openjdk-21-jdk
-sudo mkdir -p /opt/spring-performance
+# For microk8s deployment target:
+sudo snap install microk8s --classic
 
-# For Docker deployment:
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker $USER
-sudo apt install -y docker-compose
+# For Proxmox LXC deployment target:
+# Ensure Proxmox API token and node access are configured
 ```
 
 ### Step 2: Generate SSH Key
@@ -67,10 +61,7 @@ Add these secrets:
 
 | Secret Name | What to Enter |
 |-------------|---------------|
-| `PROXMOX_HOST` | Your server IP (e.g., `192.168.1.100`) |
-| `PROXMOX_USER` | SSH username (e.g., `ubuntu`) |
-| `PROXMOX_SSH_KEY` | Output of: `cat ~/.ssh/proxmox_deploy` |
-| `PROXMOX_DEPLOY_METHOD` | `systemd`, `docker`, or `docker-compose` |
+| `PROXMOX_DEPLOY_METHOD` | `micro-k8s` or `proxmox-lxc` |
 
 ### Step 4: Set Up Self-Hosted Runner
 

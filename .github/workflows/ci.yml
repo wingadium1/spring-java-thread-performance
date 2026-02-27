@@ -1,6 +1,10 @@
 name: CI - Build and Test
 
 on:
+  push:
+    branches:
+      - main
+      - develop
   pull_request:
     branches:
       - main

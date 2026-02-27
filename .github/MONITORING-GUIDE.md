@@ -94,15 +94,14 @@ ssh -i ~/.ssh/monitoring_deploy user@monitoring-host "docker ps"
 cat ~/.ssh/monitoring_deploy
 ```
 
-## Automatic Deployment
+## Automated Deployment Scripts
 
-The `deploy-monitoring.yml` workflow automatically:
+Use the repository scripts to automate monitoring deployment:
 
-1. **Fetches container IPs** from Proxmox API
-2. **Generates Prometheus config** with actual IPs
-3. **Deploys Prometheus** Docker container
-4. **Deploys Grafana** Docker container with datasource
-5. **Verifies** all targets are up and healthy
+1. **Fetch and configure targets** in Prometheus config
+2. **Deploy Prometheus** Docker container
+3. **Deploy Grafana** Docker container with datasource
+4. **Verify** all targets are up and healthy
 
 ### Trigger Deployment
 
@@ -112,8 +111,8 @@ git add monitoring/
 git commit -m "Update monitoring configuration"
 git push origin main
 
-# Or trigger manually
-# Go to Actions → Deploy Monitoring Stack → Run workflow
+# Or run monitoring setup script directly on monitoring host
+# ./monitoring/setup-monitoring.sh
 ```
 
 ## Manual Deployment

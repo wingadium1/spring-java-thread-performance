@@ -6,50 +6,15 @@ Copy this template and fill in your actual values when configuring GitHub Secret
 
 Choose ONE of the following deployment methods:
 
-1. **Proxmox VM** - Deploy to a VM using SSH (`build-and-deploy.yml`)
-2. **Proxmox LXC** - Create containers on Proxmox using API (`deploy-proxmox-lxc.yml`)
-3. **microk8s** - Deploy to Kubernetes on a VM (`deploy-microk8s.yml`)
+1. **Proxmox LXC** - Create containers on Proxmox using API (`deploy-proxmox-lxc.yml`)
+2. **microk8s** - Deploy to Kubernetes on a VM (`deploy-microk8s.yml`)
 
-## Secrets for Proxmox VM Deployment
-
-### PROXMOX_HOST
-**Description**: IP address or hostname of your Proxmox server
-**Example**: `192.168.1.100` or `proxmox.yourdomain.com`
-**Your Value**: 
-```
-<YOUR_PROXMOX_SERVER_IP_OR_HOSTNAME>
-```
-
-### PROXMOX_USER
-**Description**: SSH username for connecting to Proxmox server
-**Example**: `ubuntu`, `deploy`, or `admin`
+### PROXMOX_DEPLOY_METHOD
+**Description**: Select which deployment workflow should execute
+**Options**: `micro-k8s` or `proxmox-lxc`
 **Your Value**:
 ```
-<YOUR_SSH_USERNAME>
-```
-
-### PROXMOX_SSH_KEY
-**Description**: Private SSH key for authentication (entire key content)
-**Your Value**:
-```
------BEGIN OPENSSH PRIVATE KEY-----
-<YOUR_PRIVATE_KEY_CONTENT_HERE>
------END OPENSSH PRIVATE KEY-----
-```
-
-**To generate:**
-```bash
-ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/proxmox_deploy
-ssh-copy-id -i ~/.ssh/proxmox_deploy.pub user@proxmox-server
-cat ~/.ssh/proxmox_deploy  # Copy this output
-```
-
-### PROXMOX_DEPLOY_METHOD (Optional)
-**Description**: Deployment method to use
-**Options**: `systemd` (default), `docker`, or `docker-compose`
-**Your Value**:
-```
-systemd
+proxmox-lxc
 ```
 
 ## Secrets for Proxmox LXC Container Deployment

@@ -1,26 +1,30 @@
 name: Deploy to microk8s
 
 on:
-  push:
-    branches:
-      - main
-      - develop
+  workflow_run:
+    workflows: ["CI - Build and Test"]
+    types:
+      - completed
   workflow_dispatch:
 
 jobs:
   deploy-microk8s:
     name: Deploy to microk8s on Proxmox VM
     runs-on: self-hosted
+    env:
+      PROXMOX_DEPLOY_METHOD: ${{ secrets.PROXMOX_DEPLOY_METHOD }}
     permissions:
       contents: read
       actions: read
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'develop')) || github.event_name == 'workflow_dispatch' }}
     
     steps:
       - name: Checkout code
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
         uses: actions/checkout@v4
       
       - name: Set up JDK 21
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
         uses: actions/setup-java@v4
         with:
           java-version: '21'
@@ -28,9 +32,11 @@ jobs:
           cache: 'maven'
       
       - name: Build with Maven
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
         run: mvn clean package -DskipTests
       
       - name: Build and push Docker images to microk8s registry
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
         run: |
           # Build Docker images
           mvn jib:dockerBuild
@@ -41,6 +47,7 @@ jobs:
           docker tag spring-performance/spring-webflux:latest localhost:32000/spring-performance/spring-webflux:latest
       
       - name: Set up SSH to microk8s VM
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.MICROK8S_SSH_KEY }}" > ~/.ssh/microk8s_key
@@ -48,6 +55,7 @@ jobs:
           ssh-keyscan -H ${{ secrets.MICROK8S_HOST }} >> ~/.ssh/known_hosts
       
       - name: Save and transfer Docker images to microk8s VM
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
         run: |
           # Save Docker images
           mkdir -p /tmp/k8s-images
@@ -63,6 +71,7 @@ jobs:
           rm -rf /tmp/k8s-images
       
       - name: Load images into microk8s
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
         run: |
           ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} << 'ENDSSH'
             # Import images into microk8s
@@ -87,6 +96,7 @@ jobs:
           ENDSSH
       
       - name: Deploy to microk8s
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
         run: |
           # Create temp directory on microk8s VM
           ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} \
@@ -125,6 +135,7 @@ jobs:
           ENDSSH
       
       - name: Verify deployment
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
         run: |
           ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} << 'ENDSSH'
             echo "=== Deployments ==="
@@ -151,6 +162,7 @@ jobs:
           ENDSSH
       
       - name: Display access information
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
         run: |
           ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} << 'ENDSSH'
             echo ""
@@ -176,6 +188,6 @@ jobs:
           ENDSSH
       
       - name: Cleanup
-        if: always()
+        if: ${{ always() && env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
         run: |
           rm -f ~/.ssh/microk8s_key
