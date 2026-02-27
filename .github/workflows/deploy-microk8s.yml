@@ -22,7 +22,7 @@ jobs:
     steps:
       - name: Checkout code
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       
       - name: Resolve deployment image tag
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}

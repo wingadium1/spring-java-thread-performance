@@ -21,11 +21,11 @@ jobs:
     steps:
       - name: Checkout code
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       
       - name: Set up JDK 21
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
