@@ -1,8 +1,8 @@
 # Spring Boot Thread Performance Comparison
 
-[![Build and Deploy](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/build-and-deploy.yml/badge.svg)](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/build-and-deploy.yml)
 [![CI](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/ci.yml/badge.svg)](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/ci.yml)
-[![Build and Push Docker Images](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/build-and-push-images.yml/badge.svg)](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/build-and-push-images.yml)
+[![Deploy microk8s](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/deploy-microk8s.yml/badge.svg)](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/deploy-microk8s.yml)
+[![Deploy Proxmox LXC](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/deploy-proxmox-lxc.yml/badge.svg)](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/deploy-proxmox-lxc.yml)
 
 A comprehensive performance comparison project for different Spring Boot threading models:
 - **Traditional Spring MVC** (Servlet: Tomcat, Blocking I/O)

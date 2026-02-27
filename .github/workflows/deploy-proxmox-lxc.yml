@@ -1,26 +1,30 @@
 name: Deploy to Proxmox LXC Containers
 
 on:
-  push:
-    branches:
-      - main
-      - develop
+  workflow_run:
+    workflows: ["CI - Build and Test"]
+    types:
+      - completed
   workflow_dispatch:
 
 jobs:
   deploy-proxmox-lxc:
     name: Deploy to Proxmox LXC Containers
     runs-on: self-hosted
+    env:
+      PROXMOX_DEPLOY_METHOD: ${{ secrets.PROXMOX_DEPLOY_METHOD }}
     permissions:
       contents: read
       actions: read
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.head_branch == 'main' || github.event.workflow_run.head_branch == 'develop')) || github.event_name == 'workflow_dispatch' }}
     
     steps:
       - name: Checkout code
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         uses: actions/checkout@v4
       
       - name: Set up JDK 21
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         uses: actions/setup-java@v4
         with:
           java-version: '21'
@@ -28,19 +32,11 @@ jobs:
           cache: 'maven'
       
       - name: Build with Maven
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         run: mvn clean package -DskipTests
       
-      - name: Build Docker images
-        run: mvn jib:dockerBuild
-      
-      - name: Save Docker images
-        run: |
-          mkdir -p /tmp/lxc-images
-          docker save spring-performance/spring-mvc-traditional:latest -o /tmp/lxc-images/spring-mvc-traditional.tar
-          docker save spring-performance/spring-virtual-threads:latest -o /tmp/lxc-images/spring-virtual-threads.tar
-          docker save spring-performance/spring-webflux:latest -o /tmp/lxc-images/spring-webflux.tar
-      
       - name: Create or update LXC containers on Proxmox
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         env:
           PROXMOX_API_HOST: ${{ secrets.PROXMOX_API_HOST }}
           PROXMOX_API_TOKEN_ID: ${{ secrets.PROXMOX_API_TOKEN_ID }}
@@ -108,6 +104,7 @@ jobs:
           done
       
       - name: Install Java and deploy applications to LXC containers
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         env:
           PROXMOX_API_HOST: ${{ secrets.PROXMOX_API_HOST }}
           PROXMOX_API_TOKEN_ID: ${{ secrets.PROXMOX_API_TOKEN_ID }}
@@ -168,6 +165,7 @@ jobs:
           done
       
       - name: Verify deployment
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         env:
           PROXMOX_API_HOST: ${{ secrets.PROXMOX_API_HOST }}
           PROXMOX_SSH_KEY: ${{ secrets.PROXMOX_SSH_KEY }}
@@ -197,6 +195,7 @@ jobs:
           ENDSSH
       
       - name: Display container IPs for monitoring setup
+        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         env:
           PROXMOX_API_HOST: ${{ secrets.PROXMOX_API_HOST }}
           PROXMOX_API_TOKEN_ID: ${{ secrets.PROXMOX_API_TOKEN_ID }}
@@ -233,7 +232,6 @@ jobs:
           echo "Then run the 'Deploy Monitoring Stack' workflow."
       
       - name: Cleanup
-        if: always()
+        if: ${{ always() && env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         run: |
           rm -f ~/.ssh/proxmox_lxc_key
-          rm -rf /tmp/lxc-images

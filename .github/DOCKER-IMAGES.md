@@ -214,20 +214,13 @@ docker inspect ghcr.io/wingadium1/spring-java-thread-performance/spring-mvc-trad
 
 ## CI/CD Integration
 
-Images are automatically built and pushed by the `build-and-push-images.yml` GitHub Actions workflow.
+Images can be built and pushed from CI/CD pipelines or manually using Jib commands in this guide.
 
-### Workflow Triggers
+### Typical CI/CD Triggers
 
 - **Push to main/develop** - Builds and tags as `latest` or `develop`
 - **Git tags (v*)** - Builds and tags with version number
-- **Pull requests** - Builds images but doesn't push (for testing)
-- **Manual dispatch** - Can be triggered manually from GitHub Actions
-
-### Workflow Permissions
-
-The workflow requires the following permissions:
-- `contents: read` - To checkout code
-- `packages: write` - To push to GitHub Container Registry
+- **Pull requests** - Build validation without publishing
 
 ## Troubleshooting
 
@@ -242,9 +235,9 @@ If you have issues pulling images, make sure they are set to public visibility:
 
 ### Image Not Found
 
-Check that the workflow has completed successfully:
+Check that your CI pipeline has completed successfully:
 - Go to the repository's **Actions** tab
-- Look for the "Build and Push Docker Images to GHCR" workflow
+- Look for the latest image build pipeline run
 - Check the logs if there are any errors
 
 ### Using in Air-Gapped Environments

@@ -6,18 +6,13 @@ This repository uses GitHub Actions with self-hosted runners to build and deploy
 
 ## Available Workflows
 
-### 1. Build and Deploy to Proxmox VM (`build-and-deploy.yml`)
+### 1. CI - Build and Test (`ci.yml`)
 
-Deploys to a Proxmox VM using SSH with three deployment methods:
+Continuous integration for main development flows.
 
-**Methods:**
-- **systemd** - JAR files managed as Linux services
-- **docker** - Individual Docker containers
-- **docker-compose** - Full stack with monitoring
+**Actions:** Build with Maven, Run tests, publish Docker images to GHCR on `main`/`develop` push
 
 **Triggers:** Push to `main`/`develop`, Pull Requests, Manual
-
-**Documentation:** See [PROXMOX-SETUP.md](../PROXMOX-SETUP.md)
 
 ### 2. Deploy to Proxmox LXC Containers (`deploy-proxmox-lxc.yml`)
 
@@ -29,7 +24,7 @@ Creates and manages LXC containers directly on Proxmox using the Proxmox API:
 - Systemd service management
 - Resource allocation per container
 
-**Triggers:** Push to `main`/`develop`, Manual
+**Triggers:** After successful CI on `main`/`develop`, Manual
 
 **Documentation:** See [PROXMOX-LXC-GUIDE.md](../PROXMOX-LXC-GUIDE.md)
 
@@ -43,39 +38,23 @@ Deploys to a microk8s cluster running on a Proxmox VM:
 - Automatic image import to microk8s
 - Service scaling and self-healing
 
-**Triggers:** Push to `main`/`develop`, Manual
+**Triggers:** After successful CI on `main`/`develop`, Manual
 
 **Documentation:** See [MICROK8S-GUIDE.md](../MICROK8S-GUIDE.md)
 
-### 4. Deploy Monitoring Stack (`deploy-monitoring.yml`)
+## CI to Deploy Flow
 
-Deploys Prometheus and Grafana to a separate monitoring host:
-
-**Features:**
-- Automatic container IP discovery from Proxmox API
-- Deploys Prometheus with auto-generated config
-- Deploys Grafana with datasource provisioning
-- Includes pre-configured dashboards
-- Verifies all targets are accessible
-
-**Triggers:** Push to `main`/`develop` (monitoring/** changes), Manual
-
-**Documentation:** See [MONITORING-GUIDE.md](../MONITORING-GUIDE.md)
-
-### 5. CI - Build and Test (`ci.yml`)
-
-Simple continuous integration for pull requests:
-
-**Actions:** Build with Maven, Run tests
-
-**Triggers:** Pull Requests, Manual
+- CI (`ci.yml`) runs build + unit tests.
+- CI publishes container images to GHCR (`ghcr.io/<owner>/spring-java-thread-performance`) on `main`/`develop` pushes.
+- On successful CI for `main`/`develop`, GitHub automatically triggers deploy workflows.
+- Deployment target is selected by `PROXMOX_DEPLOY_METHOD` secret:
+	- `micro-k8s` → run `deploy-microk8s.yml`
+	- `proxmox-lxc` → run `deploy-proxmox-lxc.yml`
 
 ## Choosing a Deployment Method
 
 | Method | Complexity | Overhead | Isolation | Monitoring | Best For |
 |--------|------------|----------|-----------|------------|----------|
-| **VM + systemd** | Low | Medium | None | External | Simple deployments |
-| **VM + Docker** | Low | Low | Process | External | Quick container deploys |
 | **LXC Containers** | Medium | Very Low | OS-level | External | Multiple isolated apps ⭐ |
 | **microk8s** | Medium | Medium | Pod-level | Built-in | K8s learning/testing |
 
@@ -85,14 +64,11 @@ Simple continuous integration for pull requests:
 
 Configure secrets based on your chosen deployment method:
 
-### For VM Deployment (`build-and-deploy.yml`)
+### Deployment selector
 
-| Secret Name | Description | Example |
-|-------------|-------------|---------|
-| `PROXMOX_HOST` | VM IP or hostname | `192.168.1.100` |
-| `PROXMOX_USER` | SSH username | `ubuntu` |
-| `PROXMOX_SSH_KEY` | SSH private key | Contents of private key file |
-| `PROXMOX_DEPLOY_METHOD` | Deployment method | `systemd`, `docker`, or `docker-compose` |
+| Secret Name | Description | Allowed values |
+|-------------|-------------|----------------|
+| `PROXMOX_DEPLOY_METHOD` | Selects which deploy workflow will execute | `micro-k8s` or `proxmox-lxc` |
 
 ### For LXC Container Deployment (`deploy-proxmox-lxc.yml`)
 
@@ -112,16 +88,6 @@ Configure secrets based on your chosen deployment method:
 | `MICROK8S_USER` | SSH username | `ubuntu` |
 | `MICROK8S_SSH_KEY` | SSH private key | Contents of private key file |
 
-### For Monitoring Stack (`deploy-monitoring.yml`)
-
-| Secret Name | Description | Example |
-|-------------|-------------|---------|
-| `MONITORING_HOST` | Monitoring host IP/hostname | `192.168.1.200` |
-| `MONITORING_USER` | SSH username | `ubuntu` |
-| `MONITORING_SSH_KEY` | SSH private key | Contents of private key file |
-| `GRAFANA_ADMIN_PASSWORD` | Grafana admin password | `SecurePassword123!` |
-
-**Note**: Monitoring workflow also requires Proxmox API secrets to fetch container IPs.
 
 ### Setting up Secrets
 
