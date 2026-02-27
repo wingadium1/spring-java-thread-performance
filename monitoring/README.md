@@ -19,7 +19,7 @@ This directory contains Prometheus and Grafana configuration for monitoring Spri
 ### Automatic Deployment (GitHub Actions)
 
 1. Configure GitHub secrets (see [../.github/MONITORING-GUIDE.md](../.github/MONITORING-GUIDE.md))
-2. Push changes or manually trigger `deploy-monitoring.yml` workflow
+2. Deploy using your CI/CD pipeline or run `setup-monitoring.sh`
 3. Access Grafana at `http://monitoring-host:3000`
 
 ### Manual Deployment

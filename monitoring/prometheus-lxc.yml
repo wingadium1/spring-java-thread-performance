@@ -1,8 +1,8 @@
 # Prometheus configuration for LXC container deployment
 # This configuration expects containers to be accessible via their hostnames or IPs
 #
-# NOTE: ${CONTAINER_XXX_IP} placeholders are replaced by sed/envsubst in the
-# deployment workflow (.github/workflows/deploy-monitoring.yml), NOT by Prometheus.
+# NOTE: ${CONTAINER_XXX_IP} placeholders are replaced by sed/envsubst in your
+# deployment scripts/pipeline, NOT by Prometheus.
 # For manual deployment, replace these with actual container IP addresses.
 
 global:
