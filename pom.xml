@@ -26,6 +26,12 @@
         <maven.compiler.parameters>true</maven.compiler.parameters>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>3.2.1</spring-boot.version>
+        
+        <!-- Docker image configuration -->
+        <!-- docker.registry: Registry URL prefix (e.g., 'ghcr.io/' for GitHub Container Registry) -->
+        <!-- Leave empty for local builds without registry prefix -->
+        <docker.registry></docker.registry>
+        <docker.image.prefix>spring-performance</docker.image.prefix>
     </properties>
 
     <dependencyManagement>
@@ -57,7 +63,7 @@
                             <image>eclipse-temurin:21-jre-jammy</image>
                         </from>
                         <to>
-                            <image>spring-performance/${project.artifactId}</image>
+                            <image>${docker.registry}${docker.image.prefix}/${project.artifactId}</image>
                             <tags>
                                 <tag>latest</tag>
                                 <tag>${project.version}</tag>
@@ -71,6 +77,11 @@
                             <ports>
                                 <port>8080</port>
                             </ports>
+                            <labels>
+                                <org.opencontainers.image.source>https://github.com/wingadium1/spring-java-thread-performance</org.opencontainers.image.source>
+                                <org.opencontainers.image.description>Spring Boot Thread Performance Comparison - ${project.artifactId}</org.opencontainers.image.description>
+                                <org.opencontainers.image.licenses>MIT</org.opencontainers.image.licenses>
+                            </labels>
                         </container>
                     </configuration>
                 </plugin>

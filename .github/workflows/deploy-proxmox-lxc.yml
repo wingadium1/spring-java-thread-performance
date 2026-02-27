@@ -1,0 +1,239 @@
+name: Deploy to Proxmox LXC Containers
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+jobs:
+  deploy-proxmox-lxc:
+    name: Deploy to Proxmox LXC Containers
+    runs-on: self-hosted
+    permissions:
+      contents: read
+      actions: read
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+      
+      - name: Build with Maven
+        run: mvn clean package -DskipTests
+      
+      - name: Build Docker images
+        run: mvn jib:dockerBuild
+      
+      - name: Save Docker images
+        run: |
+          mkdir -p /tmp/lxc-images
+          docker save spring-performance/spring-mvc-traditional:latest -o /tmp/lxc-images/spring-mvc-traditional.tar
+          docker save spring-performance/spring-virtual-threads:latest -o /tmp/lxc-images/spring-virtual-threads.tar
+          docker save spring-performance/spring-webflux:latest -o /tmp/lxc-images/spring-webflux.tar
+      
+      - name: Create or update LXC containers on Proxmox
+        env:
+          PROXMOX_API_HOST: ${{ secrets.PROXMOX_API_HOST }}
+          PROXMOX_API_TOKEN_ID: ${{ secrets.PROXMOX_API_TOKEN_ID }}
+          PROXMOX_API_SECRET: ${{ secrets.PROXMOX_API_SECRET }}
+          PROXMOX_NODE: ${{ secrets.PROXMOX_NODE }}
+        run: |
+          # Install curl and jq if not available
+          command -v jq >/dev/null 2>&1 || sudo apt-get install -y jq
+          
+          # Proxmox API base URL
+          API_URL="https://${PROXMOX_API_HOST}:8006/api2/json"
+          AUTH_HEADER="PVEAPIToken=${PROXMOX_API_TOKEN_ID}=${PROXMOX_API_SECRET}"
+          
+          # Function to call Proxmox API
+          call_proxmox_api() {
+            local method=$1
+            local endpoint=$2
+            local data=$3
+            
+            if [ -n "$data" ]; then
+              curl -k -s -X "$method" \
+                -H "Authorization: $AUTH_HEADER" \
+                -d "$data" \
+                "${API_URL}${endpoint}"
+            else
+              curl -k -s -X "$method" \
+                -H "Authorization: $AUTH_HEADER" \
+                "${API_URL}${endpoint}"
+            fi
+          }
+          
+          # Create or start containers
+          for APP in "spring-mvc-traditional" "spring-virtual-threads" "spring-webflux"; do
+            echo "Processing $APP..."
+            
+            # Get container ID (assume 200, 201, 202 for the three apps)
+            case $APP in
+              "spring-mvc-traditional") CTID=200; PORT=8080 ;;
+              "spring-virtual-threads") CTID=201; PORT=8081 ;;
+              "spring-webflux") CTID=202; PORT=8082 ;;
+            esac
+            
+            # Check if container exists
+            STATUS=$(call_proxmox_api GET "/nodes/${PROXMOX_NODE}/lxc/${CTID}/status/current" | jq -r '.data.status // "notfound"')
+            
+            if [ "$STATUS" = "notfound" ]; then
+              echo "Creating new LXC container ${CTID} for ${APP}..."
+              
+              # Create LXC container (Ubuntu 22.04 template)
+              call_proxmox_api POST "/nodes/${PROXMOX_NODE}/lxc" \
+                "vmid=${CTID}&ostemplate=local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst&hostname=${APP}&memory=2048&cores=2&rootfs=local-lvm:8&net0=name=eth0,bridge=vmbr0,ip=dhcp&start=1&unprivileged=1"
+              
+              echo "Waiting for container to start..."
+              sleep 30
+            else
+              echo "Container ${CTID} already exists with status: $STATUS"
+              
+              # Start container if stopped
+              if [ "$STATUS" = "stopped" ]; then
+                echo "Starting container ${CTID}..."
+                call_proxmox_api POST "/nodes/${PROXMOX_NODE}/lxc/${CTID}/status/start"
+                sleep 15
+              fi
+            fi
+          done
+      
+      - name: Install Java and deploy applications to LXC containers
+        env:
+          PROXMOX_API_HOST: ${{ secrets.PROXMOX_API_HOST }}
+          PROXMOX_API_TOKEN_ID: ${{ secrets.PROXMOX_API_TOKEN_ID }}
+          PROXMOX_API_SECRET: ${{ secrets.PROXMOX_API_SECRET }}
+          PROXMOX_NODE: ${{ secrets.PROXMOX_NODE }}
+          PROXMOX_SSH_KEY: ${{ secrets.PROXMOX_SSH_KEY }}
+        run: |
+          # Set up SSH key for container access
+          mkdir -p ~/.ssh
+          echo "$PROXMOX_SSH_KEY" > ~/.ssh/proxmox_lxc_key
+          chmod 600 ~/.ssh/proxmox_lxc_key
+          
+          # Deploy to each container
+          for APP in "spring-mvc-traditional" "spring-virtual-threads" "spring-webflux"; do
+            case $APP in
+              "spring-mvc-traditional") CTID=200; PORT=8080 ;;
+              "spring-virtual-threads") CTID=201; PORT=8081 ;;
+              "spring-webflux") CTID=202; PORT=8082 ;;
+            esac
+            
+            echo "Deploying $APP to container ${CTID}..."
+            
+            # Get container IP from Proxmox
+            CT_IP=$(ssh -i ~/.ssh/proxmox_lxc_key root@${PROXMOX_API_HOST} \
+              "pct exec ${CTID} -- hostname -I | awk '{print \$1}'")
+            
+            if [ -z "$CT_IP" ]; then
+              echo "Failed to get IP for container ${CTID}, using container exec instead"
+              
+              # Deploy using container exec
+              ssh -i ~/.ssh/proxmox_lxc_key root@${PROXMOX_API_HOST} << ENDSSH
+                # Install Java in container if not present
+                pct exec ${CTID} -- bash -c "command -v java >/dev/null 2>&1 || (apt-get update && apt-get install -y openjdk-21-jdk)"
+                
+                # Create app directory
+                pct exec ${CTID} -- mkdir -p /opt/spring-performance
+              ENDSSH
+              
+              # Copy JAR to Proxmox host first, then to container
+              scp -i ~/.ssh/proxmox_lxc_key ${APP}/target/*.jar root@${PROXMOX_API_HOST}:/tmp/${APP}.jar
+              ssh -i ~/.ssh/proxmox_lxc_key root@${PROXMOX_API_HOST} \
+                "pct push ${CTID} /tmp/${APP}.jar /opt/spring-performance/${APP}.jar"
+              
+              # Create systemd service file locally
+              printf '[Unit]\nDescription=%s\nAfter=network.target\n\n[Service]\nType=simple\nUser=root\nWorkingDirectory=/opt/spring-performance\nExecStart=/usr/bin/java -Xms512m -Xmx2g -jar /opt/spring-performance/%s.jar\nRestart=on-failure\nRestartSec=10\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=multi-user.target\n' "${APP}" "${APP}" > /tmp/${APP}.service
+              
+              # Copy service file to Proxmox and deploy to container
+              scp -i ~/.ssh/proxmox_lxc_key /tmp/${APP}.service root@${PROXMOX_API_HOST}:/tmp/${APP}.service
+              ssh -i ~/.ssh/proxmox_lxc_key root@${PROXMOX_API_HOST} \
+                "pct push ${CTID} /tmp/${APP}.service /etc/systemd/system/${APP}.service && \
+                 pct exec ${CTID} -- systemctl daemon-reload && \
+                 pct exec ${CTID} -- systemctl enable ${APP} && \
+                 pct exec ${CTID} -- systemctl restart ${APP} && \
+                 rm /tmp/${APP}.service"
+              
+              rm /tmp/${APP}.service
+            fi
+          done
+      
+      - name: Verify deployment
+        env:
+          PROXMOX_API_HOST: ${{ secrets.PROXMOX_API_HOST }}
+          PROXMOX_SSH_KEY: ${{ secrets.PROXMOX_SSH_KEY }}
+        run: |
+          echo "Waiting for applications to start..."
+          sleep 30
+          
+          echo "Checking application health..."
+          ssh -i ~/.ssh/proxmox_lxc_key root@${PROXMOX_API_HOST} << 'ENDSSH'
+            for CTID in 200 201 202; do
+              case $CTID in
+                200) APP="spring-mvc-traditional"; PORT=8080 ;;
+                201) APP="spring-virtual-threads"; PORT=8081 ;;
+                202) APP="spring-webflux"; PORT=8082 ;;
+              esac
+              
+              echo "Checking $APP in container ${CTID}..."
+              pct exec ${CTID} -- curl -f -s http://localhost:${PORT}/actuator/health > /dev/null \
+                && echo "✓ $APP is healthy" \
+                || echo "✗ $APP health check failed"
+              
+              # Verify Prometheus metrics endpoint
+              pct exec ${CTID} -- curl -f -s http://localhost:${PORT}/actuator/prometheus > /dev/null \
+                && echo "✓ $APP metrics endpoint is accessible" \
+                || echo "✗ $APP metrics endpoint failed"
+            done
+          ENDSSH
+      
+      - name: Display container IPs for monitoring setup
+        env:
+          PROXMOX_API_HOST: ${{ secrets.PROXMOX_API_HOST }}
+          PROXMOX_API_TOKEN_ID: ${{ secrets.PROXMOX_API_TOKEN_ID }}
+          PROXMOX_API_SECRET: ${{ secrets.PROXMOX_API_SECRET }}
+          PROXMOX_NODE: ${{ secrets.PROXMOX_NODE }}
+        run: |
+          echo ""
+          echo "=== Container IPs for Monitoring ==="
+          
+          # Function to call Proxmox API
+          call_proxmox_api() {
+            local method=$1
+            local endpoint=$2
+            curl -k -s -X "$method" \
+              -H "Authorization: PVEAPIToken=${PROXMOX_API_TOKEN_ID}=${PROXMOX_API_SECRET}" \
+              "https://${PROXMOX_API_HOST}:8006/api2/json${endpoint}"
+          }
+          
+          # Get and display container IPs
+          for CTID in 200 201 202; do
+            case $CTID in
+              200) APP="spring-mvc-traditional"; PORT=8080 ;;
+              201) APP="spring-virtual-threads"; PORT=8081 ;;
+              202) APP="spring-webflux"; PORT=8082 ;;
+            esac
+            
+            IP=$(call_proxmox_api GET "/nodes/${PROXMOX_NODE}/lxc/${CTID}/interfaces" | jq -r '.data[] | select(.name=="eth0") | .inet' | cut -d'/' -f1)
+            echo "$APP (CT $CTID): $IP:$PORT"
+            echo "  Metrics: http://$IP:$PORT/actuator/prometheus"
+          done
+          
+          echo ""
+          echo "Configure these IPs in your Prometheus configuration on the monitoring host."
+          echo "Then run the 'Deploy Monitoring Stack' workflow."
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f ~/.ssh/proxmox_lxc_key
+          rm -rf /tmp/lxc-images

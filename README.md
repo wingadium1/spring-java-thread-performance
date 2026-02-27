@@ -1,5 +1,9 @@
 # Spring Boot Thread Performance Comparison
 
+[![Build and Deploy](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/build-and-deploy.yml/badge.svg)](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/build-and-deploy.yml)
+[![CI](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/ci.yml/badge.svg)](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/ci.yml)
+[![Build and Push Docker Images](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/build-and-push-images.yml/badge.svg)](https://github.com/wingadium1/spring-java-thread-performance/actions/workflows/build-and-push-images.yml)
+
 A comprehensive performance comparison project for different Spring Boot threading models:
 - **Traditional Spring MVC** (Servlet: Tomcat, Blocking I/O)
 - **Spring Boot with Virtual Threads** (Java 21)
@@ -90,7 +94,7 @@ mvn clean package
 ### Build Docker Images with Jib
 
 ```bash
-# Build all modules and create Docker images
+# Build all modules and create Docker images locally
 mvn clean package jib:dockerBuild
 
 # Or build individual images
@@ -98,6 +102,24 @@ cd spring-mvc-traditional && mvn jib:dockerBuild
 cd spring-virtual-threads && mvn jib:dockerBuild
 cd spring-webflux && mvn jib:dockerBuild
 ```
+
+### Pre-built Docker Images
+
+Docker images are automatically built and published to GitHub Container Registry (ghcr.io) for easy deployment:
+
+```bash
+# Pull images from GitHub Container Registry
+docker pull ghcr.io/wingadium1/spring-java-thread-performance/spring-mvc-traditional:latest
+docker pull ghcr.io/wingadium1/spring-java-thread-performance/spring-virtual-threads:latest
+docker pull ghcr.io/wingadium1/spring-java-thread-performance/spring-webflux:latest
+
+# Run directly from ghcr.io
+docker run -d -p 8080:8080 ghcr.io/wingadium1/spring-java-thread-performance/spring-mvc-traditional:latest
+docker run -d -p 8081:8080 ghcr.io/wingadium1/spring-java-thread-performance/spring-virtual-threads:latest
+docker run -d -p 8082:8080 ghcr.io/wingadium1/spring-java-thread-performance/spring-webflux:latest
+```
+
+📘 **See [.github/DOCKER-IMAGES.md](.github/DOCKER-IMAGES.md) for complete Docker image documentation**
 
 ## Running the Applications
 
@@ -401,6 +423,25 @@ backend spring_backend
 - **Resource Usage**: CPU, Memory, Thread count
 - **Concurrency**: Maximum concurrent requests handled
 - **Errors**: Error rate under load
+
+## CI/CD and Deployment
+
+This project uses GitHub Actions with self-hosted runners for automated build and deployment with multiple deployment options:
+
+### Deployment Options:
+1. **Proxmox VM** - Traditional VM deployment with SSH
+2. **Proxmox LXC** - Lightweight containers created via Proxmox API ⭐ **Recommended**
+3. **microk8s** - Kubernetes deployment on Proxmox VM
+4. **Monitoring Stack** - Prometheus + Grafana on separate host
+
+### Documentation:
+- **[.github/workflows/README.md](.github/workflows/README.md)** - All workflows overview
+- **[.github/PROXMOX-SETUP.md](.github/PROXMOX-SETUP.md)** - Proxmox VM deployment guide
+- **[.github/PROXMOX-LXC-GUIDE.md](.github/PROXMOX-LXC-GUIDE.md)** - Proxmox LXC container guide
+- **[.github/MICROK8S-GUIDE.md](.github/MICROK8S-GUIDE.md)** - microk8s deployment guide
+- **[.github/MONITORING-GUIDE.md](.github/MONITORING-GUIDE.md)** - Prometheus/Grafana monitoring setup
+- **[.github/SECRETS-TEMPLATE.md](.github/SECRETS-TEMPLATE.md)** - GitHub Secrets configuration
+- **[monitoring/README.md](monitoring/README.md)** - Monitoring configuration files
 
 ## Additional Documentation
 

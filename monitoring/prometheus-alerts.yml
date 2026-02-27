@@ -1,0 +1,127 @@
+groups:
+  - name: spring_boot_performance
+    interval: 30s
+    rules:
+      # High response time alert
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_server_requests_seconds_bucket{application=~"spring.*"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High response time on {{ $labels.application }}"
+          description: "95th percentile response time is {{ $value | humanizeDuration }} (threshold: 1s)"
+
+      # Critical response time
+      - alert: CriticalResponseTime
+        expr: histogram_quantile(0.95, rate(http_server_requests_seconds_bucket{application=~"spring.*"}[5m])) > 5
+        for: 2m
+        labels:
+          severity: critical
+          category: performance
+        annotations:
+          summary: "Critical response time on {{ $labels.application }}"
+          description: "95th percentile response time is {{ $value | humanizeDuration }} (threshold: 5s)"
+
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(http_server_requests_seconds_count{application=~"spring.*", status=~"5.."}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          category: reliability
+        annotations:
+          summary: "High error rate on {{ $labels.application }}"
+          description: "Error rate is {{ $value | humanize }} req/s"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (jvm_memory_used_bytes{application=~"spring.*", area="heap"} / jvm_memory_max_bytes{application=~"spring.*", area="heap"}) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High heap memory usage on {{ $labels.application }}"
+          description: "Heap usage is {{ $value | humanizePercentage }} of maximum"
+
+      # Critical memory usage
+      - alert: CriticalMemoryUsage
+        expr: (jvm_memory_used_bytes{application=~"spring.*", area="heap"} / jvm_memory_max_bytes{application=~"spring.*", area="heap"}) > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          category: resources
+        annotations:
+          summary: "Critical heap memory usage on {{ $labels.application }}"
+          description: "Heap usage is {{ $value | humanizePercentage }} of maximum. OOM risk!"
+
+      # Service down
+      - alert: ServiceDown
+        expr: up{job=~"spring.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been down for more than 1 minute"
+
+      # High GC activity
+      - alert: HighGCActivity
+        expr: rate(jvm_gc_pause_seconds_count{application=~"spring.*"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High GC activity on {{ $labels.application }}"
+          description: "GC rate is {{ $value | humanize }} events/s"
+
+      # Long GC pauses
+      - alert: LongGCPauses
+        expr: histogram_quantile(0.95, rate(jvm_gc_pause_seconds_bucket{application=~"spring.*"}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "Long GC pauses on {{ $labels.application }}"
+          description: "95th percentile GC pause time is {{ $value | humanizeDuration }}"
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: process_cpu_usage{application=~"spring.*"} > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High CPU usage on {{ $labels.application }}"
+          description: "Process CPU usage is {{ $value | humanizePercentage }}"
+
+      # Thread pool exhaustion
+      - alert: ThreadPoolExhaustion
+        expr: tomcat_threads_busy_threads{application=~"spring.*"} / tomcat_threads_config_max_threads{application=~"spring.*"} > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "Thread pool near exhaustion on {{ $labels.application }}"
+          description: "Thread pool usage is {{ $value | humanizePercentage }}"
+
+  - name: spring_boot_health
+    interval: 1m
+    rules:
+      # Health check failures
+      - alert: HealthCheckFailing
+        expr: up{job=~"spring.*"} == 0 or health_status{application=~"spring.*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Health check failing for {{ $labels.application }}"
+          description: "Application health check has been failing for 2 minutes"

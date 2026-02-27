@@ -50,11 +50,6 @@
             <plugin>
                 <groupId>com.google.cloud.tools</groupId>
                 <artifactId>jib-maven-plugin</artifactId>
-                <configuration>
-                    <to>
-                        <image>spring-performance/spring-virtual-threads</image>
-                    </to>
-                </configuration>
             </plugin>
         </plugins>
     </build>
