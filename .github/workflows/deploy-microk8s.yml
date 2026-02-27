@@ -13,6 +13,7 @@ jobs:
     runs-on: self-hosted
     env:
       PROXMOX_DEPLOY_METHOD: ${{ secrets.PROXMOX_DEPLOY_METHOD }}
+      IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/spring-java-thread-performance
     permissions:
       contents: read
       actions: read
@@ -23,28 +24,22 @@ jobs:
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
         uses: actions/checkout@v4
       
-      - name: Set up JDK 21
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'maven'
-      
-      - name: Build with Maven
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
-        run: mvn clean package -DskipTests
-      
-      - name: Build and push Docker images to microk8s registry
+      - name: Resolve deployment image tag
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
         run: |
-          # Build Docker images
-          mvn jib:dockerBuild
-          
-          # Tag images for microk8s registry
-          docker tag spring-performance/spring-mvc-traditional:latest localhost:32000/spring-performance/spring-mvc-traditional:latest
-          docker tag spring-performance/spring-virtual-threads:latest localhost:32000/spring-performance/spring-virtual-threads:latest
-          docker tag spring-performance/spring-webflux:latest localhost:32000/spring-performance/spring-webflux:latest
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            BRANCH="${{ github.event.workflow_run.head_branch }}"
+          else
+            BRANCH="${{ github.ref_name }}"
+          fi
+
+          if [[ "$BRANCH" == "main" ]]; then
+            IMAGE_TAG="latest"
+          else
+            IMAGE_TAG="develop"
+          fi
+
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
       
       - name: Set up SSH to microk8s VM
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
@@ -53,47 +48,6 @@ jobs:
           echo "${{ secrets.MICROK8S_SSH_KEY }}" > ~/.ssh/microk8s_key
           chmod 600 ~/.ssh/microk8s_key
           ssh-keyscan -H ${{ secrets.MICROK8S_HOST }} >> ~/.ssh/known_hosts
-      
-      - name: Save and transfer Docker images to microk8s VM
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
-        run: |
-          # Save Docker images
-          mkdir -p /tmp/k8s-images
-          docker save spring-performance/spring-mvc-traditional:latest -o /tmp/k8s-images/spring-mvc-traditional.tar
-          docker save spring-performance/spring-virtual-threads:latest -o /tmp/k8s-images/spring-virtual-threads.tar
-          docker save spring-performance/spring-webflux:latest -o /tmp/k8s-images/spring-webflux.tar
-          
-          # Transfer images to microk8s VM
-          scp -i ~/.ssh/microk8s_key /tmp/k8s-images/*.tar \
-            ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }}:/tmp/
-          
-          # Cleanup local images
-          rm -rf /tmp/k8s-images
-      
-      - name: Load images into microk8s
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
-        run: |
-          ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} << 'ENDSSH'
-            # Import images into microk8s
-            microk8s ctr image import /tmp/spring-mvc-traditional.tar
-            microk8s ctr image import /tmp/spring-virtual-threads.tar
-            microk8s ctr image import /tmp/spring-webflux.tar
-            
-            # Tag images for local registry
-            microk8s ctr images tag docker.io/spring-performance/spring-mvc-traditional:latest localhost:32000/spring-performance/spring-mvc-traditional:latest
-            microk8s ctr images tag docker.io/spring-performance/spring-virtual-threads:latest localhost:32000/spring-performance/spring-virtual-threads:latest
-            microk8s ctr images tag docker.io/spring-performance/spring-webflux:latest localhost:32000/spring-performance/spring-webflux:latest
-            
-            # Push to microk8s registry (if registry is enabled)
-            if microk8s status | grep -q "registry.*enabled"; then
-              microk8s ctr images push localhost:32000/spring-performance/spring-mvc-traditional:latest --plain-http
-              microk8s ctr images push localhost:32000/spring-performance/spring-virtual-threads:latest --plain-http
-              microk8s ctr images push localhost:32000/spring-performance/spring-webflux:latest --plain-http
-            fi
-            
-            # Cleanup tar files
-            rm /tmp/*.tar
-          ENDSSH
       
       - name: Deploy to microk8s
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
@@ -106,16 +60,23 @@ jobs:
           scp -i ~/.ssh/microk8s_key deployment/kubernetes/*.yaml \
             ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }}:/tmp/k8s-deploy/
           
-          ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} << 'ENDSSH'
+          ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} << ENDSSH
             # Prepare deployment directory
             rm -rf ~/spring-performance-k8s
             mkdir -p ~/spring-performance-k8s
             cp /tmp/k8s-deploy/*.yaml ~/spring-performance-k8s/
             cd ~/spring-performance-k8s
             
-            # Update image references to use local images with IfNotPresent policy
-            sed -i 's|image: spring-performance/|image: localhost:32000/spring-performance/|g' spring-*.yaml
-            sed -i '/image: localhost:32000/a\        imagePullPolicy: IfNotPresent' spring-*.yaml
+            # Update image references to use GHCR images
+            sed -i 's|image: spring-performance/|image: __IMAGE_PREFIX__/|g' spring-*.yaml
+            sed -i 's|:latest|:__IMAGE_TAG__|g' spring-*.yaml
+
+            # Ensure imagePullPolicy is Always for rolling tags
+            sed -i '/imagePullPolicy:/d' spring-*.yaml
+            sed -i '/image: __IMAGE_PREFIX__/a\        imagePullPolicy: Always' spring-*.yaml
+
+            # Replace placeholders with actual GHCR path and tag
+            sed -i 's|__IMAGE_PREFIX__|${IMAGE_PREFIX}|g; s|__IMAGE_TAG__|${IMAGE_TAG}|g' spring-*.yaml
             
             # Apply Kubernetes manifests
             microk8s kubectl apply -f spring-mvc-traditional.yaml

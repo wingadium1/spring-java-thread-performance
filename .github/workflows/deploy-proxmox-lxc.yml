@@ -35,18 +35,6 @@ jobs:
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         run: mvn clean package -DskipTests
       
-      - name: Build Docker images
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
-        run: mvn jib:dockerBuild
-      
-      - name: Save Docker images
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
-        run: |
-          mkdir -p /tmp/lxc-images
-          docker save spring-performance/spring-mvc-traditional:latest -o /tmp/lxc-images/spring-mvc-traditional.tar
-          docker save spring-performance/spring-virtual-threads:latest -o /tmp/lxc-images/spring-virtual-threads.tar
-          docker save spring-performance/spring-webflux:latest -o /tmp/lxc-images/spring-webflux.tar
-      
       - name: Create or update LXC containers on Proxmox
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         env:
@@ -247,4 +235,3 @@ jobs:
         if: ${{ always() && env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         run: |
           rm -f ~/.ssh/proxmox_lxc_key
-          rm -rf /tmp/lxc-images

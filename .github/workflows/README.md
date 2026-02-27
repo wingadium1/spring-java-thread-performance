@@ -10,7 +10,7 @@ This repository uses GitHub Actions with self-hosted runners to build and deploy
 
 Continuous integration for main development flows.
 
-**Actions:** Build with Maven, Run tests
+**Actions:** Build with Maven, Run tests, publish Docker images to GHCR on `main`/`develop` push
 
 **Triggers:** Push to `main`/`develop`, Pull Requests, Manual
 
@@ -45,6 +45,7 @@ Deploys to a microk8s cluster running on a Proxmox VM:
 ## CI to Deploy Flow
 
 - CI (`ci.yml`) runs build + unit tests.
+- CI publishes container images to GHCR (`ghcr.io/<owner>/spring-java-thread-performance`) on `main`/`develop` pushes.
 - On successful CI for `main`/`develop`, GitHub automatically triggers deploy workflows.
 - Deployment target is selected by `PROXMOX_DEPLOY_METHOD` secret:
 	- `micro-k8s` → run `deploy-microk8s.yml`
