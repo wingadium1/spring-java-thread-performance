@@ -53,8 +53,8 @@ curl -o actions-runner-linux-x64-2.311.0.tar.gz -L https://github.com/actions/ru
 # Extract the installer
 tar xzf ./actions-runner-linux-x64-2.311.0.tar.gz
 
-# Configure the runner
-./config.sh --url https://github.com/wingadium1/spring-java-thread-performance --token YOUR_TOKEN
+# Configure the runner (replace with your repository URL and token from GitHub)
+./config.sh --url https://github.com/YOUR_USERNAME/YOUR_REPOSITORY --token YOUR_TOKEN_FROM_GITHUB
 
 # Run the runner
 ./run.sh
@@ -218,9 +218,9 @@ permissions:
 ### 6.1 Test Maven Build
 
 ```bash
-# Clone your repository
-git clone https://github.com/wingadium1/spring-java-thread-performance.git
-cd spring-java-thread-performance
+# Clone your repository (replace with your actual repository URL)
+git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git
+cd YOUR_REPOSITORY
 
 # Test Maven build
 mvn clean package -DskipTests
@@ -273,7 +273,7 @@ git commit --allow-empty -m "Test self-hosted runner setup"
 git push origin test-runner-setup
 
 # Watch the workflow execution
-# Go to: https://github.com/wingadium1/spring-java-thread-performance/actions
+# Go to: https://github.com/YOUR_USERNAME/YOUR_REPOSITORY/actions
 ```
 
 ## How It Works with Self-Hosted Runners
@@ -316,7 +316,7 @@ The workflow uses `jib:build` with authentication:
 mvn -pl ${module} jib:build \
   -Djib.to.image="ghcr.io/..." \
   -Djib.to.auth.username="..." \
-  -Djib.to.auth.******
+  -Djib.to.auth.password="${GITHUB_TOKEN}"  # Password provided via environment variable
 ```
 
 ## Troubleshooting
