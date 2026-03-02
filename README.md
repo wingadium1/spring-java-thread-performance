@@ -119,7 +119,10 @@ docker run -d -p 8081:8080 ghcr.io/wingadium1/spring-java-thread-performance/spr
 docker run -d -p 8082:8080 ghcr.io/wingadium1/spring-java-thread-performance/spring-webflux:latest
 ```
 
-📘 **See [.github/DOCKER-IMAGES.md](.github/DOCKER-IMAGES.md) for complete Docker image documentation**
+📘 **Image Documentation**:
+- [.github/GHCR-QUICKSTART.md](.github/GHCR-QUICKSTART.md) - Quick start guide for GHCR setup (TL;DR)
+- [.github/GHCR-AUTHENTICATION.md](.github/GHCR-AUTHENTICATION.md) - Complete GHCR authentication and token setup guide
+- [.github/DOCKER-IMAGES.md](.github/DOCKER-IMAGES.md) - Docker image documentation and usage
 
 ## Running the Applications
 
@@ -436,6 +439,7 @@ This project uses GitHub Actions with self-hosted runners for automated build an
 
 ### Documentation:
 - **[.github/workflows/README.md](.github/workflows/README.md)** - All workflows overview
+- **[.github/SELF-HOSTED-RUNNER-SETUP.md](.github/SELF-HOSTED-RUNNER-SETUP.md)** - Self-hosted runner setup for GHCR
 - **[.github/PROXMOX-SETUP.md](.github/PROXMOX-SETUP.md)** - Proxmox VM deployment guide
 - **[.github/PROXMOX-LXC-GUIDE.md](.github/PROXMOX-LXC-GUIDE.md)** - Proxmox LXC container guide
 - **[.github/MICROK8S-GUIDE.md](.github/MICROK8S-GUIDE.md)** - microk8s deployment guide

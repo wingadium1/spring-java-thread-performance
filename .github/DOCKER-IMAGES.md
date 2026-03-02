@@ -188,6 +188,8 @@ mvn -pl spring-mvc-traditional jib:dockerBuild
 
 ### Build and Push to GHCR
 
+**For complete authentication setup and token generation guide, see [GHCR-AUTHENTICATION.md](GHCR-AUTHENTICATION.md)**
+
 ```bash
 # Login to GHCR
 echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
@@ -255,6 +257,7 @@ docker load < spring-mvc.tar
 
 ## Related Documentation
 
+- [GHCR Authentication Guide](GHCR-AUTHENTICATION.md) - Complete guide for GitHub Container Registry authentication and token setup
 - [GitHub Container Registry Documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
 - [Jib Maven Plugin Documentation](https://github.com/GoogleContainerTools/jib/tree/master/jib-maven-plugin)
 - [Main README](../README.md)
