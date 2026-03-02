@@ -1,5 +1,7 @@
 # GitHub Container Registry (GHCR) Authentication Guide
 
+> **🚀 Quick Start**: If you just want the essentials, see [GHCR-QUICKSTART.md](GHCR-QUICKSTART.md)
+
 This guide explains how to authenticate with GitHub Container Registry (ghcr.io) for building and pushing Docker images using Jib Maven plugin in GitHub Actions.
 
 ## Overview

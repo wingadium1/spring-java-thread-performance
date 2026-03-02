@@ -120,8 +120,9 @@ docker run -d -p 8082:8080 ghcr.io/wingadium1/spring-java-thread-performance/spr
 ```
 
 📘 **Image Documentation**:
-- [.github/DOCKER-IMAGES.md](.github/DOCKER-IMAGES.md) - Complete Docker image documentation
-- [.github/GHCR-AUTHENTICATION.md](.github/GHCR-AUTHENTICATION.md) - GHCR authentication and token setup guide
+- [.github/GHCR-QUICKSTART.md](.github/GHCR-QUICKSTART.md) - Quick start guide for GHCR setup (TL;DR)
+- [.github/GHCR-AUTHENTICATION.md](.github/GHCR-AUTHENTICATION.md) - Complete GHCR authentication and token setup guide
+- [.github/DOCKER-IMAGES.md](.github/DOCKER-IMAGES.md) - Docker image documentation and usage
 
 ## Running the Applications
 
