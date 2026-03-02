@@ -1,12 +1,16 @@
 # GitHub Container Registry (GHCR) Authentication Guide
 
 > **🚀 Quick Start**: If you just want the essentials, see [GHCR-QUICKSTART.md](GHCR-QUICKSTART.md)
+>
+> **🏃 Self-Hosted Runner**: Using a local GitHub Actions runner? See [SELF-HOSTED-RUNNER-SETUP.md](SELF-HOSTED-RUNNER-SETUP.md) for setup guide
 
 This guide explains how to authenticate with GitHub Container Registry (ghcr.io) for building and pushing Docker images using Jib Maven plugin in GitHub Actions.
 
 ## Overview
 
 The CI workflow (`ci.yml`) already includes Docker login configuration using the `docker/login-action@v3` which authenticates with GitHub Container Registry (ghcr.io) to push Docker images built by the Jib Maven plugin.
+
+This works on both GitHub-hosted runners and self-hosted runners.
 
 ## Current Workflow Configuration
 

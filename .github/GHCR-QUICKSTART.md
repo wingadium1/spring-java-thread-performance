@@ -9,6 +9,9 @@ Your repository already has:
 - ✅ Jib Maven plugin setup in `pom.xml`
 - ✅ Automatic image pushing to `ghcr.io`
 - ✅ Proper permissions (`packages: write`)
+- ✅ Configured for self-hosted runners (`runs-on: self-hosted`)
+
+> **Using Self-Hosted Runner?** See [SELF-HOSTED-RUNNER-SETUP.md](SELF-HOSTED-RUNNER-SETUP.md) for complete setup guide!
 
 ## What You Need to Know
 

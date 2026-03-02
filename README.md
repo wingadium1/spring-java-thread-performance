@@ -439,6 +439,7 @@ This project uses GitHub Actions with self-hosted runners for automated build an
 
 ### Documentation:
 - **[.github/workflows/README.md](.github/workflows/README.md)** - All workflows overview
+- **[.github/SELF-HOSTED-RUNNER-SETUP.md](.github/SELF-HOSTED-RUNNER-SETUP.md)** - Self-hosted runner setup for GHCR
 - **[.github/PROXMOX-SETUP.md](.github/PROXMOX-SETUP.md)** - Proxmox VM deployment guide
 - **[.github/PROXMOX-LXC-GUIDE.md](.github/PROXMOX-LXC-GUIDE.md)** - Proxmox LXC container guide
 - **[.github/MICROK8S-GUIDE.md](.github/MICROK8S-GUIDE.md)** - microk8s deployment guide

@@ -129,7 +129,9 @@ cat ~/.ssh/proxmox_deploy
 
 This workflow uses `runs-on: self-hosted` to execute on your own infrastructure.
 
-### Setting up a Self-Hosted Runner
+📘 **Complete Self-Hosted Runner Setup Guide**: See [SELF-HOSTED-RUNNER-SETUP.md](../SELF-HOSTED-RUNNER-SETUP.md) for detailed instructions on setting up a runner for Docker image building with GHCR.
+
+### Quick Setup Summary
 
 1. Go to your GitHub repository
 2. Navigate to **Settings** → **Actions** → **Runners**
@@ -161,11 +163,19 @@ curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
 sudo usermod -aG docker $USER
 
+# IMPORTANT: Restart runner service to apply docker group changes
+cd ~/actions-runner
+sudo ./svc.sh stop
+sudo ./svc.sh start
+
 # Verify installations
 java -version
 mvn -version
 docker --version
+docker ps  # Should work without sudo
 ```
+
+> **Important for GHCR**: The runner user MUST be in the `docker` group for the workflow to build and push images. See the complete guide for troubleshooting.
 
 ## Deployment Methods
 
