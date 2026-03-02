@@ -119,7 +119,9 @@ docker run -d -p 8081:8080 ghcr.io/wingadium1/spring-java-thread-performance/spr
 docker run -d -p 8082:8080 ghcr.io/wingadium1/spring-java-thread-performance/spring-webflux:latest
 ```
 
-📘 **See [.github/DOCKER-IMAGES.md](.github/DOCKER-IMAGES.md) for complete Docker image documentation**
+📘 **Image Documentation**:
+- [.github/DOCKER-IMAGES.md](.github/DOCKER-IMAGES.md) - Complete Docker image documentation
+- [.github/GHCR-AUTHENTICATION.md](.github/GHCR-AUTHENTICATION.md) - GHCR authentication and token setup guide
 
 ## Running the Applications
 

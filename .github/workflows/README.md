@@ -60,6 +60,20 @@ Deploys to a microk8s cluster running on a Proxmox VM:
 
 ⭐ **Recommended**: LXC with external Prometheus/Grafana monitoring
 
+## GitHub Container Registry (GHCR) Authentication
+
+The CI workflow automatically authenticates with GitHub Container Registry (ghcr.io) to push Docker images using Jib.
+
+**Default Configuration**: Uses `GITHUB_TOKEN` (automatically provided, no setup required)
+
+📘 **For detailed authentication setup and troubleshooting, see [GHCR-AUTHENTICATION.md](../GHCR-AUTHENTICATION.md)**
+
+Key points:
+- ✅ `docker/login-action@v3` is already configured in `ci.yml`
+- ✅ Uses `GITHUB_TOKEN` with `packages: write` permission
+- ✅ Works out of the box for pushing to `ghcr.io`
+- 📦 Images are pushed to: `ghcr.io/wingadium1/spring-java-thread-performance/{module-name}`
+
 ## Required GitHub Secrets
 
 Configure secrets based on your chosen deployment method:
