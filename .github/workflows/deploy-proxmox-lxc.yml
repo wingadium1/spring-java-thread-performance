@@ -154,6 +154,12 @@ jobs:
             printf '%s' "$1" | sed 's/:/%3A/g'
           }
 
+          urlencode_form_value() {
+            # URL-encode values for application/x-www-form-urlencoded bodies.
+            # Using jq keeps this portable on the runner since jq is already required elsewhere.
+            jq -rn --arg v "$1" '$v|@uri'
+          }
+
           wait_for_task() {
             local upid_raw=$1
             local upid
@@ -208,10 +214,12 @@ jobs:
             
             if [ "$STATUS" = "notfound" ]; then
               echo "Creating new LXC container ${CTID} for ${APP}..."
+
+              NET0_VALUE=$(urlencode_form_value 'name=eth0,bridge=vmbr0,ip=dhcp')
               
               # Create LXC container (Ubuntu 24.04 template)
               CREATE_RESP=$(call_proxmox_api POST "/nodes/${PROXMOX_NODE}/lxc" \
-                "vmid=${CTID}&ostemplate=local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst&hostname=${APP}&memory=2048&cores=2&rootfs=local-lvm:8&net0=name=eth0,bridge=vmbr0,ip=dhcp&start=1&unprivileged=1"
+                "vmid=${CTID}&ostemplate=local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst&hostname=${APP}&memory=2048&cores=2&rootfs=local-lvm:8&net0=${NET0_VALUE}&start=1&unprivileged=1"
               )
 
               UPID=$(echo "$CREATE_RESP" | jq -r '.data // empty')
