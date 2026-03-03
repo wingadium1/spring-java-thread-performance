@@ -116,6 +116,9 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s' "$PROXMOX_SSH_KEY" > ~/.ssh/proxmox_lxc_key
           chmod 600 ~/.ssh/proxmox_lxc_key
+
+          # Avoid interactive host key prompts on CI runners
+          SSH_OPTS="-i ~/.ssh/proxmox_lxc_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null"
           
           # Deploy to each container
           for APP in "spring-mvc-traditional" "spring-virtual-threads" "spring-webflux"; do
@@ -128,21 +131,21 @@ jobs:
             echo "Deploying $APP to container ${CTID}..."
 
             # Install Java in container if not present, and ensure app dir exists
-            ssh -i ~/.ssh/proxmox_lxc_key root@${PROXMOX_API_HOST} \
+            ssh ${SSH_OPTS} root@${PROXMOX_API_HOST} \
               "pct exec ${CTID} -- bash -lc 'command -v java >/dev/null 2>&1 || (apt-get update && apt-get install -y openjdk-21-jdk)' && \
                pct exec ${CTID} -- mkdir -p /opt/spring-performance"
 
             # Copy JAR to Proxmox host first, then to container
-            scp -i ~/.ssh/proxmox_lxc_key ${APP}/target/*.jar root@${PROXMOX_API_HOST}:/tmp/${APP}.jar
-            ssh -i ~/.ssh/proxmox_lxc_key root@${PROXMOX_API_HOST} \
+            scp ${SSH_OPTS} ${APP}/target/*.jar root@${PROXMOX_API_HOST}:/tmp/${APP}.jar
+            ssh ${SSH_OPTS} root@${PROXMOX_API_HOST} \
               "pct push ${CTID} /tmp/${APP}.jar /opt/spring-performance/${APP}.jar"
             
             # Create systemd service file locally
             printf '[Unit]\nDescription=%s\nAfter=network.target\n\n[Service]\nType=simple\nUser=root\nWorkingDirectory=/opt/spring-performance\nExecStart=/usr/bin/java -Xms512m -Xmx2g -jar /opt/spring-performance/%s.jar\nRestart=on-failure\nRestartSec=10\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=multi-user.target\n' "${APP}" "${APP}" > /tmp/${APP}.service
             
             # Copy service file to Proxmox and deploy to container
-            scp -i ~/.ssh/proxmox_lxc_key /tmp/${APP}.service root@${PROXMOX_API_HOST}:/tmp/${APP}.service
-            ssh -i ~/.ssh/proxmox_lxc_key root@${PROXMOX_API_HOST} \
+            scp ${SSH_OPTS} /tmp/${APP}.service root@${PROXMOX_API_HOST}:/tmp/${APP}.service
+            ssh ${SSH_OPTS} root@${PROXMOX_API_HOST} \
               "pct push ${CTID} /tmp/${APP}.service /etc/systemd/system/${APP}.service && \
                pct exec ${CTID} -- systemctl daemon-reload && \
                pct exec ${CTID} -- systemctl enable ${APP} && \
@@ -162,7 +165,7 @@ jobs:
           sleep 30
           
           echo "Checking application health..."
-          ssh -i ~/.ssh/proxmox_lxc_key root@${PROXMOX_API_HOST} << 'ENDSSH'
+          ssh -i ~/.ssh/proxmox_lxc_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null root@${PROXMOX_API_HOST} << 'ENDSSH'
             for CTID in 200 201 202; do
               case $CTID in
                 200) APP="spring-mvc-traditional"; PORT=8080 ;;
