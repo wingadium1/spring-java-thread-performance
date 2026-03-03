@@ -53,31 +53,40 @@ jobs:
           AUTH_HEADER="PVEAPIToken=${PROXMOX_API_TOKEN_ID}=${PROXMOX_API_SECRET}"
           
           # Function to call Proxmox API
-          CALL_HTTP_CODE=""
-
           call_proxmox_api_raw() {
             local method=$1
             local endpoint=$2
             local data=${3:-}
 
-            local resp body code
+            local resp
             if [ -n "$data" ]; then
               resp=$(curl -k -sS -X "$method" \
                 -H "Authorization: $AUTH_HEADER" \
                 -d "$data" \
-                -w $'\n%{http_code}' \
+                -w $'\n__PVE_HTTP_CODE__=%{http_code}' \
                 "${API_URL}${endpoint}")
             else
               resp=$(curl -k -sS -X "$method" \
                 -H "Authorization: $AUTH_HEADER" \
-                -w $'\n%{http_code}' \
+                -w $'\n__PVE_HTTP_CODE__=%{http_code}' \
                 "${API_URL}${endpoint}")
             fi
 
-            body=${resp%$'\n'*}
-            code=${resp##*$'\n'}
-            CALL_HTTP_CODE="$code"
-            printf '%s' "$body"
+            printf '%s' "$resp"
+          }
+
+          PVE_HTTP_CODE=""
+          PVE_HTTP_BODY=""
+
+          split_proxmox_resp() {
+            local resp="$1"
+            if [[ "$resp" == *$'\n__PVE_HTTP_CODE__='* ]]; then
+              PVE_HTTP_CODE="${resp##*$'\n__PVE_HTTP_CODE__='}"
+              PVE_HTTP_BODY="${resp%$'\n__PVE_HTTP_CODE__='*}"
+            else
+              PVE_HTTP_CODE=""
+              PVE_HTTP_BODY="$resp"
+            fi
           }
 
           call_proxmox_api() {
@@ -85,21 +94,22 @@ jobs:
             local endpoint=$2
             local data=${3:-}
 
-            local body
-            body=$(call_proxmox_api_raw "$method" "$endpoint" "$data")
+            local resp
+            resp=$(call_proxmox_api_raw "$method" "$endpoint" "$data")
+            split_proxmox_resp "$resp"
 
-            if [ -z "${CALL_HTTP_CODE:-}" ]; then
+            if [ -z "${PVE_HTTP_CODE:-}" ]; then
               echo "Proxmox API call failed to return HTTP status code" >&2
               return 1
             fi
 
-            if [ "$CALL_HTTP_CODE" -ge 400 ]; then
-              echo "Proxmox API error ${CALL_HTTP_CODE} for ${method} ${endpoint}" >&2
-              echo "$body" | head -c 2000 >&2 || true
+            if [ "$PVE_HTTP_CODE" -ge 400 ]; then
+              echo "Proxmox API error ${PVE_HTTP_CODE} for ${method} ${endpoint}" >&2
+              echo "$PVE_HTTP_BODY" | head -c 2000 >&2 || true
               return 1
             fi
 
-            printf '%s' "$body"
+            printf '%s' "$PVE_HTTP_BODY"
           }
 
           echo "Proxmox API URL: ${API_URL}"
@@ -121,12 +131,13 @@ jobs:
             local attempts=${2:-30}
             local i
             for i in $(seq 1 "$attempts"); do
-              local status_json status
-              status_json=$(call_proxmox_api_raw GET "/nodes/${PROXMOX_NODE}/lxc/${ctid}/status/current")
-              if [ "${CALL_HTTP_CODE}" != "200" ]; then
+              local resp status
+              resp=$(call_proxmox_api_raw GET "/nodes/${PROXMOX_NODE}/lxc/${ctid}/status/current")
+              split_proxmox_resp "$resp"
+              if [ "${PVE_HTTP_CODE}" != "200" ]; then
                 status="notfound"
               else
-                status=$(echo "$status_json" | jq -r '.data.status // "notfound"')
+                status=$(echo "$PVE_HTTP_BODY" | jq -r '.data.status // "notfound"')
               fi
               if [ "$status" != "notfound" ]; then
                 echo "Container ${ctid} is present with status: ${status}"
@@ -187,11 +198,12 @@ jobs:
             esac
             
             # Check if container exists
-            STATUS_JSON=$(call_proxmox_api_raw GET "/nodes/${PROXMOX_NODE}/lxc/${CTID}/status/current")
-            if [ "${CALL_HTTP_CODE}" != "200" ]; then
+            RESP=$(call_proxmox_api_raw GET "/nodes/${PROXMOX_NODE}/lxc/${CTID}/status/current")
+            split_proxmox_resp "$RESP"
+            if [ "${PVE_HTTP_CODE}" != "200" ]; then
               STATUS="notfound"
             else
-              STATUS=$(echo "$STATUS_JSON" | jq -r '.data.status // "notfound"')
+              STATUS=$(echo "$PVE_HTTP_BODY" | jq -r '.data.status // "notfound"')
             fi
             
             if [ "$STATUS" = "notfound" ]; then
@@ -258,11 +270,12 @@ jobs:
           for CTID in 200 201 202; do
             FOUND=""
             for NODE in $(echo "$NODES_JSON" | jq -r '.data[]?.node'); do
-              STATUS_JSON=$(call_proxmox_api_raw GET "/nodes/${NODE}/lxc/${CTID}/status/current")
-              if [ "${CALL_HTTP_CODE}" != "200" ]; then
+              RESP=$(call_proxmox_api_raw GET "/nodes/${NODE}/lxc/${CTID}/status/current")
+              split_proxmox_resp "$RESP"
+              if [ "${PVE_HTTP_CODE}" != "200" ]; then
                 STATUS="notfound"
               else
-                STATUS=$(echo "$STATUS_JSON" | jq -r '.data.status // "notfound"')
+                STATUS=$(echo "$PVE_HTTP_BODY" | jq -r '.data.status // "notfound"')
               fi
               if [ "$STATUS" != "notfound" ]; then
                 FOUND="${NODE} (${STATUS})"
