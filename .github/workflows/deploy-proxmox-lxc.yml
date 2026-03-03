@@ -12,7 +12,7 @@ jobs:
     name: Deploy to Proxmox LXC Containers
     runs-on: self-hosted
     env:
-      PROXMOX_DEPLOY_METHOD: ${{ secrets.PROXMOX_DEPLOY_METHOD }}
+      PROXMOX_DEPLOY_METHOD: ${{ vars.PROXMOX_DEPLOY_METHOD || secrets.PROXMOX_DEPLOY_METHOD }}
     permissions:
       contents: read
       actions: read
@@ -38,10 +38,10 @@ jobs:
       - name: Create or update LXC containers on Proxmox
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         env:
-          PROXMOX_API_HOST: ${{ secrets.PROXMOX_API_HOST }}
+          PROXMOX_API_HOST: ${{ vars.PROXMOX_API_HOST || secrets.PROXMOX_API_HOST }}
           PROXMOX_API_TOKEN_ID: ${{ secrets.PROXMOX_API_TOKEN_ID }}
           PROXMOX_API_SECRET: ${{ secrets.PROXMOX_API_SECRET }}
-          PROXMOX_NODE: ${{ secrets.PROXMOX_NODE }}
+          PROXMOX_NODE: ${{ vars.PROXMOX_NODE || secrets.PROXMOX_NODE }}
         run: |
           # Install curl and jq if not available
           command -v jq >/dev/null 2>&1 || sudo apt-get install -y jq
@@ -141,13 +141,13 @@ jobs:
       - name: Install Java and deploy applications to LXC containers
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         env:
-          PROXMOX_API_HOST: ${{ secrets.PROXMOX_API_HOST }}
+          PROXMOX_API_HOST: ${{ vars.PROXMOX_API_HOST || secrets.PROXMOX_API_HOST }}
           # Optional: set this to the actual Proxmox node SSH endpoint that hosts the containers.
           # If omitted, defaults to PROXMOX_API_HOST.
-          PROXMOX_SSH_HOST: ${{ secrets.PROXMOX_SSH_HOST }}
+          PROXMOX_SSH_HOST: ${{ vars.PROXMOX_SSH_HOST || secrets.PROXMOX_SSH_HOST }}
           PROXMOX_API_TOKEN_ID: ${{ secrets.PROXMOX_API_TOKEN_ID }}
           PROXMOX_API_SECRET: ${{ secrets.PROXMOX_API_SECRET }}
-          PROXMOX_NODE: ${{ secrets.PROXMOX_NODE }}
+          PROXMOX_NODE: ${{ vars.PROXMOX_NODE || secrets.PROXMOX_NODE }}
           # Prefer base64-encoded key to avoid newline/CRLF corruption in secrets
           PROXMOX_SSH_KEY_B64: ${{ secrets.PROXMOX_SSH_KEY_B64 }}
           # Backward-compatible: raw private key (multiline) secret
@@ -228,8 +228,8 @@ jobs:
       - name: Verify deployment
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         env:
-          PROXMOX_API_HOST: ${{ secrets.PROXMOX_API_HOST }}
-          PROXMOX_SSH_HOST: ${{ secrets.PROXMOX_SSH_HOST }}
+          PROXMOX_API_HOST: ${{ vars.PROXMOX_API_HOST || secrets.PROXMOX_API_HOST }}
+          PROXMOX_SSH_HOST: ${{ vars.PROXMOX_SSH_HOST || secrets.PROXMOX_SSH_HOST }}
           PROXMOX_SSH_KEY: ${{ secrets.PROXMOX_SSH_KEY }}
         run: |
           echo "Waiting for applications to start..."
@@ -262,10 +262,10 @@ jobs:
       - name: Display container IPs for monitoring setup
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         env:
-          PROXMOX_API_HOST: ${{ secrets.PROXMOX_API_HOST }}
+          PROXMOX_API_HOST: ${{ vars.PROXMOX_API_HOST || secrets.PROXMOX_API_HOST }}
           PROXMOX_API_TOKEN_ID: ${{ secrets.PROXMOX_API_TOKEN_ID }}
           PROXMOX_API_SECRET: ${{ secrets.PROXMOX_API_SECRET }}
-          PROXMOX_NODE: ${{ secrets.PROXMOX_NODE }}
+          PROXMOX_NODE: ${{ vars.PROXMOX_NODE || secrets.PROXMOX_NODE }}
         run: |
           echo ""
           echo "=== Container IPs for Monitoring ==="
