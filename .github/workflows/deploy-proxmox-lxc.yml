@@ -142,6 +142,9 @@ jobs:
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         env:
           PROXMOX_API_HOST: ${{ secrets.PROXMOX_API_HOST }}
+          # Optional: set this to the actual Proxmox node SSH endpoint that hosts the containers.
+          # If omitted, defaults to PROXMOX_API_HOST.
+          PROXMOX_SSH_HOST: ${{ secrets.PROXMOX_SSH_HOST }}
           PROXMOX_API_TOKEN_ID: ${{ secrets.PROXMOX_API_TOKEN_ID }}
           PROXMOX_API_SECRET: ${{ secrets.PROXMOX_API_SECRET }}
           PROXMOX_NODE: ${{ secrets.PROXMOX_NODE }}
@@ -175,6 +178,11 @@ jobs:
 
           # Avoid interactive host key prompts on CI runners
           SSH_OPTS="-i ~/.ssh/proxmox_lxc_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null"
+
+          # SSH target host (must be the node where the CT configs live)
+          if [ -z "${PROXMOX_SSH_HOST:-}" ]; then
+            PROXMOX_SSH_HOST="$PROXMOX_API_HOST"
+          fi
           
           # Deploy to each container
           for APP in "spring-mvc-traditional" "spring-virtual-threads" "spring-webflux"; do
@@ -187,27 +195,27 @@ jobs:
             echo "Deploying $APP to container ${CTID}..."
 
             # Guard: fail early with a clear message if the container does not exist on this Proxmox host
-            if ! ssh ${SSH_OPTS} root@${PROXMOX_API_HOST} "pct status ${CTID} >/dev/null 2>&1"; then
-              echo "Container ${CTID} not found (pct cannot read config). Ensure container creation succeeded and that PROXMOX_API_HOST points to the Proxmox node '${PROXMOX_NODE}' where the CT lives."
+            if ! ssh ${SSH_OPTS} root@${PROXMOX_SSH_HOST} "pct status ${CTID} >/dev/null 2>&1"; then
+              echo "Container ${CTID} not found on SSH host '${PROXMOX_SSH_HOST}' (pct cannot read config). Ensure container creation succeeded and set PROXMOX_SSH_HOST to the Proxmox node '${PROXMOX_NODE}' where the CT lives."
               exit 1
             fi
 
             # Install Java in container if not present, and ensure app dir exists
-            ssh ${SSH_OPTS} root@${PROXMOX_API_HOST} \
+            ssh ${SSH_OPTS} root@${PROXMOX_SSH_HOST} \
               "pct exec ${CTID} -- bash -lc 'command -v java >/dev/null 2>&1 || (apt-get update && apt-get install -y openjdk-21-jdk)' && \
                pct exec ${CTID} -- mkdir -p /opt/spring-performance"
 
             # Copy JAR to Proxmox host first, then to container
-            scp ${SSH_OPTS} ${APP}/target/*.jar root@${PROXMOX_API_HOST}:/tmp/${APP}.jar
-            ssh ${SSH_OPTS} root@${PROXMOX_API_HOST} \
+            scp ${SSH_OPTS} ${APP}/target/*.jar root@${PROXMOX_SSH_HOST}:/tmp/${APP}.jar
+            ssh ${SSH_OPTS} root@${PROXMOX_SSH_HOST} \
               "pct push ${CTID} /tmp/${APP}.jar /opt/spring-performance/${APP}.jar"
             
             # Create systemd service file locally
             printf '[Unit]\nDescription=%s\nAfter=network.target\n\n[Service]\nType=simple\nUser=root\nWorkingDirectory=/opt/spring-performance\nExecStart=/usr/bin/java -Xms512m -Xmx2g -jar /opt/spring-performance/%s.jar\nRestart=on-failure\nRestartSec=10\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=multi-user.target\n' "${APP}" "${APP}" > /tmp/${APP}.service
             
             # Copy service file to Proxmox and deploy to container
-            scp ${SSH_OPTS} /tmp/${APP}.service root@${PROXMOX_API_HOST}:/tmp/${APP}.service
-            ssh ${SSH_OPTS} root@${PROXMOX_API_HOST} \
+            scp ${SSH_OPTS} /tmp/${APP}.service root@${PROXMOX_SSH_HOST}:/tmp/${APP}.service
+            ssh ${SSH_OPTS} root@${PROXMOX_SSH_HOST} \
               "pct push ${CTID} /tmp/${APP}.service /etc/systemd/system/${APP}.service && \
                pct exec ${CTID} -- systemctl daemon-reload && \
                pct exec ${CTID} -- systemctl enable ${APP} && \
@@ -221,13 +229,17 @@ jobs:
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
         env:
           PROXMOX_API_HOST: ${{ secrets.PROXMOX_API_HOST }}
+          PROXMOX_SSH_HOST: ${{ secrets.PROXMOX_SSH_HOST }}
           PROXMOX_SSH_KEY: ${{ secrets.PROXMOX_SSH_KEY }}
         run: |
           echo "Waiting for applications to start..."
           sleep 30
           
           echo "Checking application health..."
-          ssh -i ~/.ssh/proxmox_lxc_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null root@${PROXMOX_API_HOST} << 'ENDSSH'
+          if [ -z "${PROXMOX_SSH_HOST:-}" ]; then
+            PROXMOX_SSH_HOST="$PROXMOX_API_HOST"
+          fi
+          ssh -i ~/.ssh/proxmox_lxc_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null root@${PROXMOX_SSH_HOST} << 'ENDSSH'
             for CTID in 200 201 202; do
               case $CTID in
                 200) APP="spring-mvc-traditional"; PORT=8080 ;;
