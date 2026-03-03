@@ -13,10 +13,10 @@
     <description>Performance comparison of Spring Boot with different threading models</description>
 
     <modules>
+        <module>common</module>
         <module>spring-mvc-traditional</module>
         <module>spring-virtual-threads</module>
         <module>spring-webflux</module>
-        <module>common</module>
     </modules>
 
     <properties>
