@@ -53,21 +53,53 @@ jobs:
           AUTH_HEADER="PVEAPIToken=${PROXMOX_API_TOKEN_ID}=${PROXMOX_API_SECRET}"
           
           # Function to call Proxmox API
+          CALL_HTTP_CODE=""
+
+          call_proxmox_api_raw() {
+            local method=$1
+            local endpoint=$2
+            local data=${3:-}
+
+            local resp body code
+            if [ -n "$data" ]; then
+              resp=$(curl -k -sS -X "$method" \
+                -H "Authorization: $AUTH_HEADER" \
+                -d "$data" \
+                -w $'\n%{http_code}' \
+                "${API_URL}${endpoint}")
+            else
+              resp=$(curl -k -sS -X "$method" \
+                -H "Authorization: $AUTH_HEADER" \
+                -w $'\n%{http_code}' \
+                "${API_URL}${endpoint}")
+            fi
+
+            body=${resp%$'\n'*}
+            code=${resp##*$'\n'}
+            CALL_HTTP_CODE="$code"
+            printf '%s' "$body"
+          }
+
           call_proxmox_api() {
             local method=$1
             local endpoint=$2
             local data=${3:-}
-            
-            if [ -n "$data" ]; then
-              curl -k -sS --fail -X "$method" \
-                -H "Authorization: $AUTH_HEADER" \
-                -d "$data" \
-                "${API_URL}${endpoint}"
-            else
-              curl -k -sS --fail -X "$method" \
-                -H "Authorization: $AUTH_HEADER" \
-                "${API_URL}${endpoint}"
+
+            local body
+            body=$(call_proxmox_api_raw "$method" "$endpoint" "$data")
+
+            if [ -z "${CALL_HTTP_CODE:-}" ]; then
+              echo "Proxmox API call failed to return HTTP status code" >&2
+              return 1
             fi
+
+            if [ "$CALL_HTTP_CODE" -ge 400 ]; then
+              echo "Proxmox API error ${CALL_HTTP_CODE} for ${method} ${endpoint}" >&2
+              echo "$body" | head -c 2000 >&2 || true
+              return 1
+            fi
+
+            printf '%s' "$body"
           }
 
           echo "Proxmox API URL: ${API_URL}"
@@ -89,8 +121,13 @@ jobs:
             local attempts=${2:-30}
             local i
             for i in $(seq 1 "$attempts"); do
-              local status
-              status=$(call_proxmox_api GET "/nodes/${PROXMOX_NODE}/lxc/${ctid}/status/current" | jq -r '.data.status // "notfound"')
+              local status_json status
+              status_json=$(call_proxmox_api_raw GET "/nodes/${PROXMOX_NODE}/lxc/${ctid}/status/current")
+              if [ "${CALL_HTTP_CODE}" != "200" ]; then
+                status="notfound"
+              else
+                status=$(echo "$status_json" | jq -r '.data.status // "notfound"')
+              fi
               if [ "$status" != "notfound" ]; then
                 echo "Container ${ctid} is present with status: ${status}"
                 return 0
@@ -150,7 +187,12 @@ jobs:
             esac
             
             # Check if container exists
-            STATUS=$(call_proxmox_api GET "/nodes/${PROXMOX_NODE}/lxc/${CTID}/status/current" | jq -r '.data.status // "notfound"')
+            STATUS_JSON=$(call_proxmox_api_raw GET "/nodes/${PROXMOX_NODE}/lxc/${CTID}/status/current")
+            if [ "${CALL_HTTP_CODE}" != "200" ]; then
+              STATUS="notfound"
+            else
+              STATUS=$(echo "$STATUS_JSON" | jq -r '.data.status // "notfound"')
+            fi
             
             if [ "$STATUS" = "notfound" ]; then
               echo "Creating new LXC container ${CTID} for ${APP}..."
@@ -216,7 +258,12 @@ jobs:
           for CTID in 200 201 202; do
             FOUND=""
             for NODE in $(echo "$NODES_JSON" | jq -r '.data[]?.node'); do
-              STATUS=$(call_proxmox_api GET "/nodes/${NODE}/lxc/${CTID}/status/current" | jq -r '.data.status // "notfound"')
+              STATUS_JSON=$(call_proxmox_api_raw GET "/nodes/${NODE}/lxc/${CTID}/status/current")
+              if [ "${CALL_HTTP_CODE}" != "200" ]; then
+                STATUS="notfound"
+              else
+                STATUS=$(echo "$STATUS_JSON" | jq -r '.data.status // "notfound"')
+              fi
               if [ "$STATUS" != "notfound" ]; then
                 FOUND="${NODE} (${STATUS})"
                 break
