@@ -43,6 +43,8 @@ jobs:
           PROXMOX_API_SECRET: ${{ secrets.PROXMOX_API_SECRET }}
           PROXMOX_NODE: ${{ vars.PROXMOX_NODE || secrets.PROXMOX_NODE }}
         run: |
+          set -euo pipefail
+
           # Install curl and jq if not available
           command -v jq >/dev/null 2>&1 || sudo apt-get install -y jq
           
@@ -54,19 +56,33 @@ jobs:
           call_proxmox_api() {
             local method=$1
             local endpoint=$2
-            local data=$3
+            local data=${3:-}
             
             if [ -n "$data" ]; then
-              curl -k -s -X "$method" \
+              curl -k -sS --fail -X "$method" \
                 -H "Authorization: $AUTH_HEADER" \
                 -d "$data" \
                 "${API_URL}${endpoint}"
             else
-              curl -k -s -X "$method" \
+              curl -k -sS --fail -X "$method" \
                 -H "Authorization: $AUTH_HEADER" \
                 "${API_URL}${endpoint}"
             fi
           }
+
+          echo "Proxmox API URL: ${API_URL}"
+
+          # Sanity check: ensure API is reachable and token is valid
+          NODES_JSON=$(call_proxmox_api GET "/nodes")
+          if ! echo "$NODES_JSON" | jq -e '.data and (.data | length > 0)' >/dev/null; then
+            echo "Failed to list Proxmox nodes via API. Check:"
+            echo "- PROXMOX_API_HOST should be host/IP only (e.g. 10.16.90.103), not https://... or :8006 or /api2/json"
+            echo "- PROXMOX_API_TOKEN_ID / PROXMOX_API_SECRET are correct"
+            echo "- Proxmox API is reachable from the runner"
+            echo "Raw response (truncated):"
+            echo "$NODES_JSON" | head -c 1000 || true
+            exit 1
+          fi
 
           wait_for_container() {
             local ctid=$1
@@ -81,6 +97,44 @@ jobs:
               fi
               sleep 2
             done
+            return 1
+          }
+
+          urlencode_upid() {
+            # UPID contains ':' which must be URL-encoded in the API path
+            # Proxmox UPIDs typically only need ':' encoding here.
+            printf '%s' "$1" | sed 's/:/%3A/g'
+          }
+
+          wait_for_task() {
+            local upid_raw=$1
+            local upid
+            local attempts=${2:-60}
+            local i
+            upid=$(urlencode_upid "$upid_raw")
+            for i in $(seq 1 "$attempts"); do
+              local task_json
+              task_json=$(call_proxmox_api GET "/nodes/${PROXMOX_NODE}/tasks/${upid}/status")
+              local status exitstatus
+              status=$(echo "$task_json" | jq -r '.data.status // empty')
+              exitstatus=$(echo "$task_json" | jq -r '.data.exitstatus // empty')
+
+              if [ "$status" = "stopped" ]; then
+                if [ -n "$exitstatus" ] && [ "$exitstatus" != "OK" ]; then
+                  echo "Task ${upid_raw} failed with exitstatus: ${exitstatus}"
+                  echo "Task log (last 200 lines):"
+                  call_proxmox_api GET "/nodes/${PROXMOX_NODE}/tasks/${upid}/log?start=0&limit=200" \
+                    | jq -r '.data[]?.t' || true
+                  return 1
+                fi
+                echo "Task ${upid_raw} finished: ${exitstatus:-OK}"
+                return 0
+              fi
+
+              sleep 2
+            done
+
+            echo "Task ${upid_raw} did not stop in time"
             return 1
           }
           
@@ -114,6 +168,7 @@ jobs:
               fi
 
               echo "Create task: $UPID"
+              wait_for_task "$UPID" 90
               echo "Waiting for container ${CTID} to appear..."
               if ! wait_for_container "${CTID}" 45; then
                 echo "Container ${CTID} still not found after create. Common causes: missing LXC template, wrong PROXMOX_NODE, insufficient permissions, or storage/net config issues."
@@ -133,6 +188,7 @@ jobs:
                   exit 1
                 fi
                 echo "Start task: $START_UPID"
+                wait_for_task "$START_UPID" 60
                 sleep 5
               fi
             fi
@@ -143,9 +199,8 @@ jobs:
           echo "API host: ${PROXMOX_API_HOST}"
           echo "Target node (PROXMOX_NODE): ${PROXMOX_NODE}"
 
-          NODES_JSON=$(call_proxmox_api GET "/nodes")
-          echo "Nodes:" 
-          echo "$NODES_JSON" | jq -r '.data[]?.node' || true
+          echo "Nodes:"
+          echo "$NODES_JSON" | jq -r '.data[]?.node'
 
           echo ""
           echo "LXC list per node (vmid, name, status):"
@@ -232,23 +287,23 @@ jobs:
 
             echo "Debug: PROXMOX_NODE=${PROXMOX_NODE}, PROXMOX_API_HOST=${PROXMOX_API_HOST}, PROXMOX_SSH_HOST=${PROXMOX_SSH_HOST}"
             echo "Debug: SSH host identity and available CTs:"
-            ssh ${SSH_OPTS} root@${PROXMOX_SSH_HOST} "hostname && echo 'nodes:' && ls -1 /etc/pve/nodes 2>/dev/null || true && echo 'pct list (first 20):' && pct list 2>/dev/null | head -n 20 || true"
+              ssh ${SSH_OPTS} root@${PROXMOX_SSH_HOST} "export PATH=/usr/sbin:/usr/bin:/sbin:/bin:\$PATH; hostname; echo 'PATH='\"\$PATH\"; echo 'pct='\"\$(command -v pct || true)\"; echo 'nodes:'; ls -1 /etc/pve/nodes 2>/dev/null || true; echo 'pct list (first 20):'; pct list 2>/dev/null | head -n 20 || true"
 
             # Guard: fail early with a clear message if the container does not exist on this Proxmox host
-            if ! ssh ${SSH_OPTS} root@${PROXMOX_SSH_HOST} "pct status ${CTID} >/dev/null 2>&1"; then
-              echo "Container ${CTID} not found on SSH host '${PROXMOX_SSH_HOST}' (pct cannot read config). Ensure container creation succeeded and set PROXMOX_SSH_HOST to the Proxmox node '${PROXMOX_NODE}' where the CT lives."
+            if ! ssh ${SSH_OPTS} root@${PROXMOX_SSH_HOST} "export PATH=/usr/sbin:/usr/bin:/sbin:/bin:\$PATH; pct status ${CTID} >/dev/null 2>&1"; then
+              echo "Container ${CTID} not found on SSH host '${PROXMOX_SSH_HOST}' (or pct not available in PATH). Ensure container creation succeeded, and that SSH lands on the Proxmox node '${PROXMOX_NODE}' where the CT lives."
               exit 1
             fi
 
             # Install Java in container if not present, and ensure app dir exists
             ssh ${SSH_OPTS} root@${PROXMOX_SSH_HOST} \
-              "pct exec ${CTID} -- bash -lc 'command -v java >/dev/null 2>&1 || (apt-get update && apt-get install -y openjdk-21-jdk)' && \
+              "export PATH=/usr/sbin:/usr/bin:/sbin:/bin:\$PATH; pct exec ${CTID} -- bash -lc 'command -v java >/dev/null 2>&1 || (apt-get update && apt-get install -y openjdk-21-jdk)' && \
                pct exec ${CTID} -- mkdir -p /opt/spring-performance"
 
             # Copy JAR to Proxmox host first, then to container
             scp ${SSH_OPTS} ${APP}/target/*.jar root@${PROXMOX_SSH_HOST}:/tmp/${APP}.jar
             ssh ${SSH_OPTS} root@${PROXMOX_SSH_HOST} \
-              "pct push ${CTID} /tmp/${APP}.jar /opt/spring-performance/${APP}.jar"
+              "export PATH=/usr/sbin:/usr/bin:/sbin:/bin:\$PATH; pct push ${CTID} /tmp/${APP}.jar /opt/spring-performance/${APP}.jar"
             
             # Create systemd service file locally
             printf '[Unit]\nDescription=%s\nAfter=network.target\n\n[Service]\nType=simple\nUser=root\nWorkingDirectory=/opt/spring-performance\nExecStart=/usr/bin/java -Xms512m -Xmx2g -jar /opt/spring-performance/%s.jar\nRestart=on-failure\nRestartSec=10\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=multi-user.target\n' "${APP}" "${APP}" > /tmp/${APP}.service
@@ -256,7 +311,7 @@ jobs:
             # Copy service file to Proxmox and deploy to container
             scp ${SSH_OPTS} /tmp/${APP}.service root@${PROXMOX_SSH_HOST}:/tmp/${APP}.service
             ssh ${SSH_OPTS} root@${PROXMOX_SSH_HOST} \
-              "pct push ${CTID} /tmp/${APP}.service /etc/systemd/system/${APP}.service && \
+              "export PATH=/usr/sbin:/usr/bin:/sbin:/bin:\$PATH; pct push ${CTID} /tmp/${APP}.service /etc/systemd/system/${APP}.service && \
                pct exec ${CTID} -- systemctl daemon-reload && \
                pct exec ${CTID} -- systemctl enable ${APP} && \
                pct exec ${CTID} -- systemctl restart ${APP} && \
@@ -280,6 +335,7 @@ jobs:
             PROXMOX_SSH_HOST="$PROXMOX_API_HOST"
           fi
           ssh -i ~/.ssh/proxmox_lxc_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null root@${PROXMOX_SSH_HOST} << 'ENDSSH'
+            export PATH=/usr/sbin:/usr/bin:/sbin:/bin:$PATH
             for CTID in 200 201 202; do
               case $CTID in
                 200) APP="spring-mvc-traditional"; PORT=8080 ;;
