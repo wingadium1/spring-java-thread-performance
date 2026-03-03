@@ -114,7 +114,7 @@ jobs:
         run: |
           # Set up SSH key for container access
           mkdir -p ~/.ssh
-          echo "$PROXMOX_SSH_KEY" > ~/.ssh/proxmox_lxc_key
+          printf '%s' "$PROXMOX_SSH_KEY" > ~/.ssh/proxmox_lxc_key
           chmod 600 ~/.ssh/proxmox_lxc_key
           
           # Deploy to each container
@@ -126,42 +126,30 @@ jobs:
             esac
             
             echo "Deploying $APP to container ${CTID}..."
+
+            # Install Java in container if not present, and ensure app dir exists
+            ssh -i ~/.ssh/proxmox_lxc_key root@${PROXMOX_API_HOST} \
+              "pct exec ${CTID} -- bash -lc 'command -v java >/dev/null 2>&1 || (apt-get update && apt-get install -y openjdk-21-jdk)' && \
+               pct exec ${CTID} -- mkdir -p /opt/spring-performance"
+
+            # Copy JAR to Proxmox host first, then to container
+            scp -i ~/.ssh/proxmox_lxc_key ${APP}/target/*.jar root@${PROXMOX_API_HOST}:/tmp/${APP}.jar
+            ssh -i ~/.ssh/proxmox_lxc_key root@${PROXMOX_API_HOST} \
+              "pct push ${CTID} /tmp/${APP}.jar /opt/spring-performance/${APP}.jar"
             
-            # Get container IP from Proxmox
-            CT_IP=$(ssh -i ~/.ssh/proxmox_lxc_key root@${PROXMOX_API_HOST} \
-              "pct exec ${CTID} -- hostname -I | awk '{print \$1}'")
+            # Create systemd service file locally
+            printf '[Unit]\nDescription=%s\nAfter=network.target\n\n[Service]\nType=simple\nUser=root\nWorkingDirectory=/opt/spring-performance\nExecStart=/usr/bin/java -Xms512m -Xmx2g -jar /opt/spring-performance/%s.jar\nRestart=on-failure\nRestartSec=10\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=multi-user.target\n' "${APP}" "${APP}" > /tmp/${APP}.service
             
-            if [ -z "$CT_IP" ]; then
-              echo "Failed to get IP for container ${CTID}, using container exec instead"
-              
-              # Deploy using container exec
-              ssh -i ~/.ssh/proxmox_lxc_key root@${PROXMOX_API_HOST} << ENDSSH
-                # Install Java in container if not present
-                pct exec ${CTID} -- bash -c "command -v java >/dev/null 2>&1 || (apt-get update && apt-get install -y openjdk-21-jdk)"
-                
-                # Create app directory
-                pct exec ${CTID} -- mkdir -p /opt/spring-performance
-              ENDSSH
-              
-              # Copy JAR to Proxmox host first, then to container
-              scp -i ~/.ssh/proxmox_lxc_key ${APP}/target/*.jar root@${PROXMOX_API_HOST}:/tmp/${APP}.jar
-              ssh -i ~/.ssh/proxmox_lxc_key root@${PROXMOX_API_HOST} \
-                "pct push ${CTID} /tmp/${APP}.jar /opt/spring-performance/${APP}.jar"
-              
-              # Create systemd service file locally
-              printf '[Unit]\nDescription=%s\nAfter=network.target\n\n[Service]\nType=simple\nUser=root\nWorkingDirectory=/opt/spring-performance\nExecStart=/usr/bin/java -Xms512m -Xmx2g -jar /opt/spring-performance/%s.jar\nRestart=on-failure\nRestartSec=10\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=multi-user.target\n' "${APP}" "${APP}" > /tmp/${APP}.service
-              
-              # Copy service file to Proxmox and deploy to container
-              scp -i ~/.ssh/proxmox_lxc_key /tmp/${APP}.service root@${PROXMOX_API_HOST}:/tmp/${APP}.service
-              ssh -i ~/.ssh/proxmox_lxc_key root@${PROXMOX_API_HOST} \
-                "pct push ${CTID} /tmp/${APP}.service /etc/systemd/system/${APP}.service && \
-                 pct exec ${CTID} -- systemctl daemon-reload && \
-                 pct exec ${CTID} -- systemctl enable ${APP} && \
-                 pct exec ${CTID} -- systemctl restart ${APP} && \
-                 rm /tmp/${APP}.service"
-              
-              rm /tmp/${APP}.service
-            fi
+            # Copy service file to Proxmox and deploy to container
+            scp -i ~/.ssh/proxmox_lxc_key /tmp/${APP}.service root@${PROXMOX_API_HOST}:/tmp/${APP}.service
+            ssh -i ~/.ssh/proxmox_lxc_key root@${PROXMOX_API_HOST} \
+              "pct push ${CTID} /tmp/${APP}.service /etc/systemd/system/${APP}.service && \
+               pct exec ${CTID} -- systemctl daemon-reload && \
+               pct exec ${CTID} -- systemctl enable ${APP} && \
+               pct exec ${CTID} -- systemctl restart ${APP} && \
+               rm /tmp/${APP}.service"
+            
+            rm /tmp/${APP}.service
           done
       
       - name: Verify deployment
