@@ -67,6 +67,22 @@ jobs:
                 "${API_URL}${endpoint}"
             fi
           }
+
+          wait_for_container() {
+            local ctid=$1
+            local attempts=${2:-30}
+            local i
+            for i in $(seq 1 "$attempts"); do
+              local status
+              status=$(call_proxmox_api GET "/nodes/${PROXMOX_NODE}/lxc/${ctid}/status/current" | jq -r '.data.status // "notfound"')
+              if [ "$status" != "notfound" ]; then
+                echo "Container ${ctid} is present with status: ${status}"
+                return 0
+              fi
+              sleep 2
+            done
+            return 1
+          }
           
           # Create or start containers
           for APP in "spring-mvc-traditional" "spring-virtual-threads" "spring-webflux"; do
@@ -85,20 +101,39 @@ jobs:
             if [ "$STATUS" = "notfound" ]; then
               echo "Creating new LXC container ${CTID} for ${APP}..."
               
-              # Create LXC container (Ubuntu 22.04 template)
-              call_proxmox_api POST "/nodes/${PROXMOX_NODE}/lxc" \
-                "vmid=${CTID}&ostemplate=local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst&hostname=${APP}&memory=2048&cores=2&rootfs=local-lvm:8&net0=name=eth0,bridge=vmbr0,ip=dhcp&start=1&unprivileged=1"
-              
-              echo "Waiting for container to start..."
-              sleep 30
+              # Create LXC container (Ubuntu 24.04 template)
+              CREATE_RESP=$(call_proxmox_api POST "/nodes/${PROXMOX_NODE}/lxc" \
+                "vmid=${CTID}&ostemplate=local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst&hostname=${APP}&memory=2048&cores=2&rootfs=local-lvm:8&net0=name=eth0,bridge=vmbr0,ip=dhcp&start=1&unprivileged=1"
+              )
+
+              UPID=$(echo "$CREATE_RESP" | jq -r '.data // empty')
+              if [ -z "$UPID" ]; then
+                echo "Container create API call did not return a task UPID. Response:"
+                echo "$CREATE_RESP" | jq -C . || echo "$CREATE_RESP"
+                exit 1
+              fi
+
+              echo "Create task: $UPID"
+              echo "Waiting for container ${CTID} to appear..."
+              if ! wait_for_container "${CTID}" 45; then
+                echo "Container ${CTID} still not found after create. Common causes: missing LXC template, wrong PROXMOX_NODE, insufficient permissions, or storage/net config issues."
+                exit 1
+              fi
             else
               echo "Container ${CTID} already exists with status: $STATUS"
               
               # Start container if stopped
               if [ "$STATUS" = "stopped" ]; then
                 echo "Starting container ${CTID}..."
-                call_proxmox_api POST "/nodes/${PROXMOX_NODE}/lxc/${CTID}/status/start"
-                sleep 15
+                START_RESP=$(call_proxmox_api POST "/nodes/${PROXMOX_NODE}/lxc/${CTID}/status/start")
+                START_UPID=$(echo "$START_RESP" | jq -r '.data // empty')
+                if [ -z "$START_UPID" ]; then
+                  echo "Container start API call did not return a task UPID. Response:"
+                  echo "$START_RESP" | jq -C . || echo "$START_RESP"
+                  exit 1
+                fi
+                echo "Start task: $START_UPID"
+                sleep 5
               fi
             fi
           done
@@ -150,6 +185,12 @@ jobs:
             esac
             
             echo "Deploying $APP to container ${CTID}..."
+
+            # Guard: fail early with a clear message if the container does not exist on this Proxmox host
+            if ! ssh ${SSH_OPTS} root@${PROXMOX_API_HOST} "pct status ${CTID} >/dev/null 2>&1"; then
+              echo "Container ${CTID} not found (pct cannot read config). Ensure container creation succeeded and that PROXMOX_API_HOST points to the Proxmox node '${PROXMOX_NODE}' where the CT lives."
+              exit 1
+            fi
 
             # Install Java in container if not present, and ensure app dir exists
             ssh ${SSH_OPTS} root@${PROXMOX_API_HOST} \
