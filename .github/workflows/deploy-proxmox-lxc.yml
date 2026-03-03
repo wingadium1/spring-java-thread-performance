@@ -137,6 +137,42 @@ jobs:
               fi
             fi
           done
+
+          echo ""
+          echo "=== Proxmox API Diagnostics ==="
+          echo "API host: ${PROXMOX_API_HOST}"
+          echo "Target node (PROXMOX_NODE): ${PROXMOX_NODE}"
+
+          NODES_JSON=$(call_proxmox_api GET "/nodes")
+          echo "Nodes:" 
+          echo "$NODES_JSON" | jq -r '.data[]?.node' || true
+
+          echo ""
+          echo "LXC list per node (vmid, name, status):"
+          for NODE in $(echo "$NODES_JSON" | jq -r '.data[]?.node'); do
+            echo "- ${NODE}:"
+            call_proxmox_api GET "/nodes/${NODE}/lxc" \
+              | jq -r '.data[]? | "  \(.vmid)\t\(.name // .hostname // "-")\t\(.status // "-")"' \
+              || echo "  (failed to list lxc on ${NODE})"
+          done
+
+          echo ""
+          echo "Locate CTIDs 200/201/202 across nodes:"
+          for CTID in 200 201 202; do
+            FOUND=""
+            for NODE in $(echo "$NODES_JSON" | jq -r '.data[]?.node'); do
+              STATUS=$(call_proxmox_api GET "/nodes/${NODE}/lxc/${CTID}/status/current" | jq -r '.data.status // "notfound"')
+              if [ "$STATUS" != "notfound" ]; then
+                FOUND="${NODE} (${STATUS})"
+                break
+              fi
+            done
+            if [ -n "$FOUND" ]; then
+              echo "CT ${CTID}: ${FOUND}"
+            else
+              echo "CT ${CTID}: not found on any node"
+            fi
+          done
       
       - name: Install Java and deploy applications to LXC containers
         if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
@@ -193,6 +229,10 @@ jobs:
             esac
             
             echo "Deploying $APP to container ${CTID}..."
+
+            echo "Debug: PROXMOX_NODE=${PROXMOX_NODE}, PROXMOX_API_HOST=${PROXMOX_API_HOST}, PROXMOX_SSH_HOST=${PROXMOX_SSH_HOST}"
+            echo "Debug: SSH host identity and available CTs:"
+            ssh ${SSH_OPTS} root@${PROXMOX_SSH_HOST} "hostname && echo 'nodes:' && ls -1 /etc/pve/nodes 2>/dev/null || true && echo 'pct list (first 20):' && pct list 2>/dev/null | head -n 20 || true"
 
             # Guard: fail early with a clear message if the container does not exist on this Proxmox host
             if ! ssh ${SSH_OPTS} root@${PROXMOX_SSH_HOST} "pct status ${CTID} >/dev/null 2>&1"; then
