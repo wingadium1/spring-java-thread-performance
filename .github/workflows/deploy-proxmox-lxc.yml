@@ -110,12 +110,33 @@ jobs:
           PROXMOX_API_TOKEN_ID: ${{ secrets.PROXMOX_API_TOKEN_ID }}
           PROXMOX_API_SECRET: ${{ secrets.PROXMOX_API_SECRET }}
           PROXMOX_NODE: ${{ secrets.PROXMOX_NODE }}
+          # Prefer base64-encoded key to avoid newline/CRLF corruption in secrets
+          PROXMOX_SSH_KEY_B64: ${{ secrets.PROXMOX_SSH_KEY_B64 }}
+          # Backward-compatible: raw private key (multiline) secret
           PROXMOX_SSH_KEY: ${{ secrets.PROXMOX_SSH_KEY }}
         run: |
           # Set up SSH key for container access
           mkdir -p ~/.ssh
-          printf '%s' "$PROXMOX_SSH_KEY" > ~/.ssh/proxmox_lxc_key
+          if [ -n "${PROXMOX_SSH_KEY_B64:-}" ]; then
+            # Base64 is safest for GitHub Secrets
+            printf '%s' "$PROXMOX_SSH_KEY_B64" | tr -d ' \n\r\t' | base64 -d > ~/.ssh/proxmox_lxc_key
+          else
+            # Support both true-multiline secrets and single-line strings with "\n" escapes
+            printf '%b' "$PROXMOX_SSH_KEY" > ~/.ssh/proxmox_lxc_key
+          fi
+
+          # Normalize CRLF (common cause of: error in libcrypto)
+          tr -d '\r' < ~/.ssh/proxmox_lxc_key > ~/.ssh/proxmox_lxc_key.tmp
+          mv ~/.ssh/proxmox_lxc_key.tmp ~/.ssh/proxmox_lxc_key
+
           chmod 600 ~/.ssh/proxmox_lxc_key
+
+          # Safe diagnostics (does not print key body)
+          echo "SSH key header: $(head -n 1 ~/.ssh/proxmox_lxc_key || true)"
+          echo "SSH key bytes: $(wc -c < ~/.ssh/proxmox_lxc_key || true)"
+
+          # Fail fast if the key cannot be parsed
+          ssh-keygen -y -f ~/.ssh/proxmox_lxc_key > /dev/null
 
           # Avoid interactive host key prompts on CI runners
           SSH_OPTS="-i ~/.ssh/proxmox_lxc_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o GlobalKnownHostsFile=/dev/null"
