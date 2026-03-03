@@ -2,13 +2,17 @@
 
 ## Overview
 
-This repository uses GitHub Actions with self-hosted runners to build and deploy Spring Boot applications using multiple deployment strategies.
+This repository uses GitHub Actions to build and deploy Spring Boot applications using multiple deployment strategies:
+- **CI and Build**: Uses GitHub-hosted runners (`ubuntu-latest`) for building, testing, and pushing images to GHCR
+- **Deployment**: Uses self-hosted runners for deployment to Proxmox infrastructure due to network limitations
 
 ## Available Workflows
 
 ### 1. CI - Build and Test (`ci.yml`)
 
 Continuous integration for main development flows.
+
+**Runner Type:** GitHub-hosted (`ubuntu-latest`)
 
 **Actions:** Build with Maven, Run tests, publish Docker images to GHCR on `main`/`develop` push
 
@@ -17,6 +21,8 @@ Continuous integration for main development flows.
 ### 2. Deploy to Proxmox LXC Containers (`deploy-proxmox-lxc.yml`)
 
 Creates and manages LXC containers directly on Proxmox using the Proxmox API:
+
+**Runner Type:** Self-hosted (required for network access to Proxmox infrastructure)
 
 **Features:**
 - Automatic container creation via Proxmox API
@@ -32,6 +38,8 @@ Creates and manages LXC containers directly on Proxmox using the Proxmox API:
 
 Deploys to a microk8s cluster running on a Proxmox VM:
 
+**Runner Type:** Self-hosted (required for network access to Proxmox infrastructure)
+
 **Features:**
 - Kubernetes-native deployment
 - Uses existing Kubernetes manifests
@@ -44,9 +52,10 @@ Deploys to a microk8s cluster running on a Proxmox VM:
 
 ## CI to Deploy Flow
 
-- CI (`ci.yml`) runs build + unit tests.
+- CI (`ci.yml`) runs on **GitHub-hosted runners** (`ubuntu-latest`) for build + unit tests.
 - CI publishes container images to GHCR (`ghcr.io/<owner>/spring-java-thread-performance`) on `main`/`develop` pushes.
 - On successful CI for `main`/`develop`, GitHub automatically triggers deploy workflows.
+- Deployment workflows run on **self-hosted runners** due to network access requirements to Proxmox infrastructure.
 - Deployment target is selected by `PROXMOX_DEPLOY_METHOD` secret:
 	- `micro-k8s` → run `deploy-microk8s.yml`
 	- `proxmox-lxc` → run `deploy-proxmox-lxc.yml`
@@ -127,9 +136,9 @@ cat ~/.ssh/proxmox_deploy
 
 ## Self-Hosted Runner Setup
 
-This workflow uses `runs-on: self-hosted` to execute on your own infrastructure.
+Self-hosted runners are **only required for deployment workflows** due to network access requirements to Proxmox infrastructure. The CI/build workflows use GitHub-hosted runners and do not require any self-hosted runner setup.
 
-📘 **Complete Self-Hosted Runner Setup Guide**: See [SELF-HOSTED-RUNNER-SETUP.md](../SELF-HOSTED-RUNNER-SETUP.md) for detailed instructions on setting up a runner for Docker image building with GHCR.
+📘 **Complete Self-Hosted Runner Setup Guide**: See [SELF-HOSTED-RUNNER-SETUP.md](../SELF-HOSTED-RUNNER-SETUP.md) for detailed instructions.
 
 ### Quick Setup Summary
 
@@ -140,42 +149,25 @@ This workflow uses `runs-on: self-hosted` to execute on your own infrastructure.
 
 ### Runner Requirements
 
-The self-hosted runner should have:
-- **Java 21** (OpenJDK or Temurin)
-- **Maven 3.6+**
-- **Docker** (if building Docker images)
-- **SSH client**
-- Sufficient disk space for build artifacts
-- Network access to Proxmox server
+The self-hosted runner **for deployment** should have:
+- **SSH client** (required for deployment)
+- Network access to Proxmox server (required for deployment)
+- Sufficient disk space for temporary files
+
+**Note**: Java, Maven, and Docker are **NOT required** on the self-hosted runner since CI/build runs on GitHub-hosted runners.
 
 ### Installing Prerequisites on Runner
 
 ```bash
-# Install Java 21
+# Minimal setup for deployment-only runner
 sudo apt update
-sudo apt install -y openjdk-21-jdk
+sudo apt install -y openssh-client curl jq
 
-# Install Maven
-sudo apt install -y maven
-
-# Install Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER
-
-# IMPORTANT: Restart runner service to apply docker group changes
-cd ~/actions-runner
-sudo ./svc.sh stop
-sudo ./svc.sh start
-
-# Verify installations
-java -version
-mvn -version
-docker --version
-docker ps  # Should work without sudo
+# Verify installation
+ssh -V
+curl --version
+jq --version
 ```
-
-> **Important for GHCR**: The runner user MUST be in the `docker` group for the workflow to build and push images. See the complete guide for troubleshooting.
 
 ## Deployment Methods
 
