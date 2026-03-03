@@ -95,6 +95,7 @@ jobs:
           VERSION_TAG: ${{ steps.tags.outputs.version }}
           SHA_TAG: ${{ steps.tags.outputs.sha }}
         run: |
+          mvn clean install
           for module in spring-mvc-traditional spring-virtual-threads spring-webflux; do
             echo "Building and pushing ${module}..."
 
