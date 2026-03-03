@@ -56,7 +56,7 @@ Deploys to a microk8s cluster running on a Proxmox VM:
 - CI publishes container images to GHCR (`ghcr.io/<owner>/spring-java-thread-performance`) on `main`/`develop` pushes.
 - On successful CI for `main`/`develop`, GitHub automatically triggers deploy workflows.
 - Deployment workflows run on **self-hosted runners** due to network access requirements to Proxmox infrastructure.
-- Deployment target is selected by `PROXMOX_DEPLOY_METHOD` secret:
+- Deployment target is selected by `DEPLOY_METHOD` secret:
 	- `micro-k8s` → run `deploy-microk8s.yml`
 	- `proxmox-lxc` → run `deploy-proxmox-lxc.yml`
 
@@ -91,7 +91,7 @@ Configure secrets based on your chosen deployment method:
 
 | Secret Name | Description | Allowed values |
 |-------------|-------------|----------------|
-| `PROXMOX_DEPLOY_METHOD` | Selects which deploy workflow will execute | `micro-k8s` or `proxmox-lxc` |
+| `DEPLOY_METHOD` | Selects which deploy workflow will execute | `micro-k8s` or `proxmox-lxc` |
 
 ### For LXC Container Deployment (`deploy-proxmox-lxc.yml`)
 
@@ -171,7 +171,7 @@ jq --version
 
 ## Deployment Methods
 
-The workflow supports three deployment methods (configured via `PROXMOX_DEPLOY_METHOD` secret):
+The workflow supports three deployment methods (configured via `DEPLOY_METHOD` secret):
 
 ### 1. Systemd Services (default)
 

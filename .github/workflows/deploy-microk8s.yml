@@ -12,8 +12,12 @@ jobs:
     name: Deploy to microk8s on Proxmox VM
     runs-on: self-hosted
     env:
-      PROXMOX_DEPLOY_METHOD: ${{ secrets.PROXMOX_DEPLOY_METHOD }}
+      DEPLOY_METHOD: ${{ vars.DEPLOY_METHOD || secrets.DEPLOY_METHOD }}
       IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/spring-java-thread-performance
+      MICROK8S_HOST: ${{ vars.MICROK8S_HOST || secrets.MICROK8S_HOST }}
+      MICROK8S_USER: ${{ vars.MICROK8S_USER || secrets.MICROK8S_USER }}
+      MICROK8S_SSH_KEY_B64: ${{ secrets.MICROK8S_SSH_KEY_B64 }}
+      MICROK8S_SSH_KEY: ${{ secrets.MICROK8S_SSH_KEY }}
     permissions:
       contents: read
       actions: read
@@ -21,11 +25,11 @@ jobs:
     
     steps:
       - name: Checkout code
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
-        uses: actions/checkout@v6
+        if: ${{ env.DEPLOY_METHOD == 'micro-k8s' }}
+        uses: actions/checkout@v4
       
       - name: Resolve deployment image tag
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
+        if: ${{ env.DEPLOY_METHOD == 'micro-k8s' }}
         run: |
           if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
             BRANCH="${{ github.event.workflow_run.head_branch }}"
@@ -42,25 +46,49 @@ jobs:
           echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
       
       - name: Set up SSH to microk8s VM
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
+        if: ${{ env.DEPLOY_METHOD == 'micro-k8s' }}
         run: |
+          set -euo pipefail
+
           mkdir -p ~/.ssh
-          echo "${{ secrets.MICROK8S_SSH_KEY }}" > ~/.ssh/microk8s_key
+          if [ -n "${MICROK8S_SSH_KEY_B64:-}" ]; then
+            echo "$MICROK8S_SSH_KEY_B64" | base64 -d > ~/.ssh/microk8s_key
+          else
+            echo "$MICROK8S_SSH_KEY" > ~/.ssh/microk8s_key
+          fi
+
+          # Normalize CRLF (common when secrets are pasted from Windows)
+          perl -pi -e 's/\r\n?/\n/g' ~/.ssh/microk8s_key
           chmod 600 ~/.ssh/microk8s_key
-          ssh-keyscan -H ${{ secrets.MICROK8S_HOST }} >> ~/.ssh/known_hosts
+
+          # Validate key can be parsed
+          ssh-keygen -y -f ~/.ssh/microk8s_key >/dev/null
+
+          ssh-keyscan -T 5 -H "$MICROK8S_HOST" >> ~/.ssh/known_hosts
       
       - name: Deploy to microk8s
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
+        if: ${{ env.DEPLOY_METHOD == 'micro-k8s' }}
         run: |
+          set -euo pipefail
+
+          SSH_OPTS=(
+            -i ~/.ssh/microk8s_key
+            -o BatchMode=yes
+            -o ConnectTimeout=10
+            -o ServerAliveInterval=10
+            -o ServerAliveCountMax=3
+          )
+
           # Create temp directory on microk8s VM
-          ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} \
+          ssh "${SSH_OPTS[@]}" "$MICROK8S_USER@$MICROK8S_HOST" \
             "mkdir -p /tmp/k8s-deploy"
           
           # Copy fresh Kubernetes manifests
-          scp -i ~/.ssh/microk8s_key deployment/kubernetes/*.yaml \
-            ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }}:/tmp/k8s-deploy/
+          scp "${SSH_OPTS[@]}" deployment/kubernetes/*.yaml \
+            "$MICROK8S_USER@$MICROK8S_HOST:/tmp/k8s-deploy/"
           
-          ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} << ENDSSH
+          ssh "${SSH_OPTS[@]}" "$MICROK8S_USER@$MICROK8S_HOST" \
+            "IMAGE_PREFIX='$IMAGE_PREFIX' IMAGE_TAG='$IMAGE_TAG' bash -se" << 'ENDSSH'
             # Prepare deployment directory
             rm -rf ~/spring-performance-k8s
             mkdir -p ~/spring-performance-k8s
@@ -68,15 +96,12 @@ jobs:
             cd ~/spring-performance-k8s
             
             # Update image references to use GHCR images
-            sed -i 's|image: spring-performance/|image: __IMAGE_PREFIX__/|g' spring-*.yaml
-            sed -i 's|:latest|:__IMAGE_TAG__|g' spring-*.yaml
+            sed -i "s|image: spring-performance/|image: ${IMAGE_PREFIX}/|g" spring-*.yaml
+            sed -i "s|:latest|:${IMAGE_TAG}|g" spring-*.yaml
 
             # Ensure imagePullPolicy is Always for rolling tags
             sed -i '/imagePullPolicy:/d' spring-*.yaml
-            sed -i '/image: __IMAGE_PREFIX__/a\        imagePullPolicy: Always' spring-*.yaml
-
-            # Replace placeholders with actual GHCR path and tag
-            sed -i 's|__IMAGE_PREFIX__|${IMAGE_PREFIX}|g; s|__IMAGE_TAG__|${IMAGE_TAG}|g' spring-*.yaml
+            sed -i '/^[[:space:]]*image: /a\        imagePullPolicy: Always' spring-*.yaml
             
             # Apply Kubernetes manifests
             microk8s kubectl apply -f spring-mvc-traditional.yaml
@@ -96,9 +121,19 @@ jobs:
           ENDSSH
       
       - name: Verify deployment
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
+        if: ${{ env.DEPLOY_METHOD == 'micro-k8s' }}
         run: |
-          ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} << 'ENDSSH'
+          set -euo pipefail
+
+          SSH_OPTS=(
+            -i ~/.ssh/microk8s_key
+            -o BatchMode=yes
+            -o ConnectTimeout=10
+            -o ServerAliveInterval=10
+            -o ServerAliveCountMax=3
+          )
+
+          ssh "${SSH_OPTS[@]}" "$MICROK8S_USER@$MICROK8S_HOST" << 'ENDSSH'
             echo "=== Deployments ==="
             microk8s kubectl get deployments
             
@@ -109,23 +144,26 @@ jobs:
             echo ""
             echo "=== Services ==="
             microk8s kubectl get services
-            
+
             echo ""
-            echo "=== Health Checks ==="
-            # Get service cluster IPs and test health
-            for app in spring-mvc-traditional spring-virtual-threads spring-webflux; do
-              POD=$(microk8s kubectl get pod -l app=$app -o jsonpath='{.items[0].metadata.name}')
-              if [ -n "$POD" ]; then
-                echo "Testing $app..."
-                microk8s kubectl exec $POD -- curl -f -s http://localhost:8080/actuator/health > /dev/null && echo "✓ $app is healthy" || echo "✗ $app health check failed"
-              fi
-            done
+            echo "=== Endpoints ==="
+            microk8s kubectl get endpoints
           ENDSSH
       
       - name: Display access information
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
+        if: ${{ env.DEPLOY_METHOD == 'micro-k8s' }}
         run: |
-          ssh -i ~/.ssh/microk8s_key ${{ secrets.MICROK8S_USER }}@${{ secrets.MICROK8S_HOST }} << 'ENDSSH'
+          set -euo pipefail
+
+          SSH_OPTS=(
+            -i ~/.ssh/microk8s_key
+            -o BatchMode=yes
+            -o ConnectTimeout=10
+            -o ServerAliveInterval=10
+            -o ServerAliveCountMax=3
+          )
+
+          ssh "${SSH_OPTS[@]}" "$MICROK8S_USER@$MICROK8S_HOST" << 'ENDSSH'
             echo ""
             echo "=== Access Information ==="
             echo "To access services from your local machine:"
@@ -149,6 +187,6 @@ jobs:
           ENDSSH
       
       - name: Cleanup
-        if: ${{ always() && env.PROXMOX_DEPLOY_METHOD == 'micro-k8s' }}
+        if: ${{ always() && env.DEPLOY_METHOD == 'micro-k8s' }}
         run: |
           rm -f ~/.ssh/microk8s_key

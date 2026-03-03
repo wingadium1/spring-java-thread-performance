@@ -61,7 +61,7 @@ Add these secrets:
 
 | Secret Name | What to Enter |
 |-------------|---------------|
-| `PROXMOX_DEPLOY_METHOD` | `micro-k8s` or `proxmox-lxc` |
+| `DEPLOY_METHOD` | `micro-k8s` or `proxmox-lxc` |
 
 ### Step 4: Set Up Self-Hosted Runner
 
@@ -91,7 +91,7 @@ Test locally before using GitHub Actions:
 export PROXMOX_HOST=192.168.1.100
 export PROXMOX_USER=ubuntu
 export PROXMOX_SSH_KEY_PATH=~/.ssh/proxmox_deploy
-export PROXMOX_DEPLOY_METHOD=systemd
+export DEPLOY_METHOD=systemd
 
 ./.github/test-deployment.sh
 ```

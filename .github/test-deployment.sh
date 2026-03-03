@@ -49,13 +49,13 @@ check_requirements() {
     fi
     
     # Set default deployment method if not specified
-    PROXMOX_DEPLOY_METHOD=${PROXMOX_DEPLOY_METHOD:-systemd}
+    DEPLOY_METHOD=${DEPLOY_METHOD:-systemd}
     
     print_info "Configuration:"
     echo "  Host: $PROXMOX_HOST"
     echo "  User: $PROXMOX_USER"
     echo "  SSH Key: $PROXMOX_SSH_KEY_PATH"
-    echo "  Deploy Method: $PROXMOX_DEPLOY_METHOD"
+    echo "  Deploy Method: $DEPLOY_METHOD"
 }
 
 # Test SSH connection
@@ -284,7 +284,7 @@ main() {
     build_project
     echo ""
     
-    if [ "$PROXMOX_DEPLOY_METHOD" = "docker" ] || [ "$PROXMOX_DEPLOY_METHOD" = "docker-compose" ]; then
+    if [ "$DEPLOY_METHOD" = "docker" ] || [ "$DEPLOY_METHOD" = "docker-compose" ]; then
         build_docker_images
         echo ""
     fi
@@ -292,7 +292,7 @@ main() {
     deploy_jars
     echo ""
     
-    case "$PROXMOX_DEPLOY_METHOD" in
+    case "$DEPLOY_METHOD" in
         systemd)
             deploy_systemd
             ;;
@@ -303,7 +303,7 @@ main() {
             deploy_docker_compose
             ;;
         *)
-            print_warning "Unknown deploy method: $PROXMOX_DEPLOY_METHOD, using systemd"
+            print_warning "Unknown deploy method: $DEPLOY_METHOD, using systemd"
             deploy_systemd
             ;;
     esac
@@ -330,14 +330,14 @@ usage() {
     echo "  PROXMOX_SSH_KEY_PATH    - Path to SSH private key"
     echo ""
     echo "Optional environment variables:"
-    echo "  PROXMOX_DEPLOY_METHOD   - Deployment method (systemd|docker|docker-compose)"
+    echo "  DEPLOY_METHOD   - Deployment method (systemd|docker|docker-compose)"
     echo "                            Default: systemd"
     echo ""
     echo "Example:"
     echo "  export PROXMOX_HOST=192.168.1.100"
     echo "  export PROXMOX_USER=ubuntu"
     echo "  export PROXMOX_SSH_KEY_PATH=~/.ssh/proxmox_deploy"
-    echo "  export PROXMOX_DEPLOY_METHOD=systemd"
+    echo "  export DEPLOY_METHOD=systemd"
     echo "  $0"
 }
 

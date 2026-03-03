@@ -9,7 +9,7 @@ Choose ONE of the following deployment methods:
 1. **Proxmox LXC** - Create containers on Proxmox using API (`deploy-proxmox-lxc.yml`)
 2. **microk8s** - Deploy to Kubernetes on a VM (`deploy-microk8s.yml`)
 
-### PROXMOX_DEPLOY_METHOD
+### DEPLOY_METHOD
 **Description**: Select which deployment workflow should execute
 **Options**: `micro-k8s` or `proxmox-lxc`
 **Your Value**:

@@ -12,7 +12,7 @@ jobs:
     name: Deploy to Proxmox LXC Containers
     runs-on: self-hosted
     env:
-      PROXMOX_DEPLOY_METHOD: ${{ vars.PROXMOX_DEPLOY_METHOD || secrets.PROXMOX_DEPLOY_METHOD }}
+      DEPLOY_METHOD: ${{ vars.DEPLOY_METHOD || secrets.DEPLOY_METHOD }}
     permissions:
       contents: read
       actions: read
@@ -20,11 +20,11 @@ jobs:
     
     steps:
       - name: Checkout code
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
+        if: ${{ env.DEPLOY_METHOD == 'proxmox-lxc' }}
         uses: actions/checkout@v6
       
       - name: Set up JDK 21
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
+        if: ${{ env.DEPLOY_METHOD == 'proxmox-lxc' }}
         uses: actions/setup-java@v5
         with:
           java-version: '21'
@@ -32,11 +32,11 @@ jobs:
           cache: 'maven'
       
       - name: Build with Maven
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
+        if: ${{ env.DEPLOY_METHOD == 'proxmox-lxc' }}
         run: mvn clean package -DskipTests
       
       - name: Create or update LXC containers on Proxmox
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
+        if: ${{ env.DEPLOY_METHOD == 'proxmox-lxc' }}
         env:
           PROXMOX_API_HOST: ${{ vars.PROXMOX_API_HOST || secrets.PROXMOX_API_HOST }}
           PROXMOX_API_TOKEN_ID: ${{ secrets.PROXMOX_API_TOKEN_ID }}
@@ -298,7 +298,7 @@ jobs:
           done
       
       - name: Install Java and deploy applications to LXC containers
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
+        if: ${{ env.DEPLOY_METHOD == 'proxmox-lxc' }}
         env:
           PROXMOX_API_HOST: ${{ vars.PROXMOX_API_HOST || secrets.PROXMOX_API_HOST }}
           # Optional: set this to the actual Proxmox node SSH endpoint that hosts the containers.
@@ -389,7 +389,7 @@ jobs:
           done
       
       - name: Verify deployment
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
+        if: ${{ env.DEPLOY_METHOD == 'proxmox-lxc' }}
         env:
           PROXMOX_API_HOST: ${{ vars.PROXMOX_API_HOST || secrets.PROXMOX_API_HOST }}
           PROXMOX_SSH_HOST: ${{ vars.PROXMOX_SSH_HOST || secrets.PROXMOX_SSH_HOST }}
@@ -424,7 +424,7 @@ jobs:
           ENDSSH
       
       - name: Display container IPs for monitoring setup
-        if: ${{ env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
+        if: ${{ env.DEPLOY_METHOD == 'proxmox-lxc' }}
         env:
           PROXMOX_API_HOST: ${{ vars.PROXMOX_API_HOST || secrets.PROXMOX_API_HOST }}
           PROXMOX_API_TOKEN_ID: ${{ secrets.PROXMOX_API_TOKEN_ID }}
@@ -461,6 +461,6 @@ jobs:
           echo "Then run the 'Deploy Monitoring Stack' workflow."
       
       - name: Cleanup
-        if: ${{ always() && env.PROXMOX_DEPLOY_METHOD == 'proxmox-lxc' }}
+        if: ${{ always() && env.DEPLOY_METHOD == 'proxmox-lxc' }}
         run: |
           rm -f ~/.ssh/proxmox_lxc_key

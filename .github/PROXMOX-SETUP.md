@@ -76,7 +76,7 @@ cat ~/.ssh/proxmox_deploy
 | `PROXMOX_HOST` | Your Proxmox server IP or hostname | `192.168.1.100` |
 | `PROXMOX_USER` | SSH username | `ubuntu` or `deploy` |
 | `PROXMOX_SSH_KEY` | Private key content from step 2 | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
-| `PROXMOX_DEPLOY_METHOD` | Deployment method | `systemd` (default), `docker`, or `docker-compose` |
+| `DEPLOY_METHOD` | Deployment method | `systemd` (default), `docker`, or `docker-compose` |
 
 **Important**: 
 - Copy the entire private key including the header and footer lines
@@ -141,7 +141,7 @@ sudo ./svc.sh restart
 - Requires manual Java installation
 - Less portable than containers
 
-**Set secret:** `PROXMOX_DEPLOY_METHOD=systemd` (or omit for default)
+**Set secret:** `DEPLOY_METHOD=systemd` (or omit for default)
 
 ### Method 2: Docker (Recommended for Container Deployments)
 
@@ -159,7 +159,7 @@ sudo ./svc.sh restart
 - Requires Docker on Proxmox
 - Manual container management
 
-**Set secret:** `PROXMOX_DEPLOY_METHOD=docker`
+**Set secret:** `DEPLOY_METHOD=docker`
 
 ### Method 3: Docker Compose (Recommended for Full Stack)
 
@@ -178,7 +178,7 @@ sudo ./svc.sh restart
 - Requires Docker and Docker Compose
 - More complex setup
 
-**Set secret:** `PROXMOX_DEPLOY_METHOD=docker-compose`
+**Set secret:** `DEPLOY_METHOD=docker-compose`
 
 ## Verification
 
@@ -191,7 +191,7 @@ You can test the deployment locally before setting up GitHub Actions:
 export PROXMOX_HOST=192.168.1.100
 export PROXMOX_USER=ubuntu
 export PROXMOX_SSH_KEY_PATH=~/.ssh/proxmox_deploy
-export PROXMOX_DEPLOY_METHOD=systemd  # or docker or docker-compose
+export DEPLOY_METHOD=systemd  # or docker or docker-compose
 
 # Run the test deployment script
 ./.github/test-deployment.sh
