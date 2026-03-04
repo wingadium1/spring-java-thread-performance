@@ -6,6 +6,29 @@
 2. kubectl configured to access the cluster
 3. Docker images built and pushed to a registry
 
+### microk8s (recommended for local / Proxmox VM deployments)
+
+Enable the required addons before deploying:
+
+```bash
+# NGINX Ingress controller (ingressClass: public)
+microk8s enable ingress
+
+# MetalLB – assigns real LoadBalancer IPs to the ingress controller
+# Replace the IP range with one that suits your network
+microk8s enable metallb:192.168.1.200-192.168.1.220
+```
+
+After both addons are active, the NGINX ingress controller receives an external IP
+from MetalLB.  All three Spring services are then reachable through that single IP
+using path-based routing (no DNS or `/etc/hosts` entry required):
+
+| Path prefix | Backend service | Example |
+|---|---|---|
+| `http://<LB-IP>/mvc/api/...` | spring-mvc-traditional | `http://<LB-IP>/mvc/api/hello` |
+| `http://<LB-IP>/virtual/api/...` | spring-virtual-threads | `http://<LB-IP>/virtual/api/hello` |
+| `http://<LB-IP>/webflux/api/...` | spring-webflux | `http://<LB-IP>/webflux/api/hello` |
+
 ## Building and Pushing Images
 
 ### Using Docker Registry
@@ -39,14 +62,25 @@ kubectl apply -f deployment/kubernetes/spring-virtual-threads.yaml
 kubectl apply -f deployment/kubernetes/spring-webflux.yaml
 ```
 
-### Deploy Ingress (optional)
+### Deploy Ingress
+
+The ingress manifest uses `ingressClassName: public` (microk8s built-in NGINX
+addon) and strips path prefixes before forwarding requests to each service:
 
 ```bash
-# Install NGINX Ingress Controller (if not already installed)
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.1/deploy/static/provider/cloud/deploy.yaml
+# microk8s (ingress + metallb addons must already be enabled)
+microk8s kubectl apply -f deployment/kubernetes/ingress.yaml
 
-# Deploy ingress
+# Standard kubectl
 kubectl apply -f deployment/kubernetes/ingress.yaml
+```
+
+Get the external IP assigned by MetalLB:
+
+```bash
+microk8s kubectl get ingress spring-performance-ingress
+# NAME                         CLASS    HOSTS   ADDRESS          PORTS   AGE
+# spring-performance-ingress   public   *       192.168.1.200    80      1m
 ```
 
 ## Verification
@@ -57,6 +91,7 @@ kubectl apply -f deployment/kubernetes/ingress.yaml
 kubectl get deployments
 kubectl get pods
 kubectl get services
+kubectl get ingress
 ```
 
 ### Check Pod Status
@@ -77,7 +112,30 @@ kubectl logs -l app=spring-webflux --tail=50 -f
 
 ## Testing
 
-### Port Forwarding for Testing
+### Using Ingress (via MetalLB IP)
+
+Once the ingress has an external IP:
+
+```bash
+LB_IP=$(kubectl get ingress spring-performance-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+curl http://${LB_IP}/mvc/api/hello
+curl http://${LB_IP}/virtual/api/hello
+curl http://${LB_IP}/webflux/api/hello
+```
+
+### Load Testing with wrk
+
+```bash
+LB_IP=$(kubectl get ingress spring-performance-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+# 4 threads, 100 concurrent connections, 30-second run
+wrk -t4 -c100 -d30s http://${LB_IP}/mvc/api/query
+wrk -t4 -c100 -d30s http://${LB_IP}/virtual/api/query
+wrk -t4 -c100 -d30s http://${LB_IP}/webflux/api/query
+```
+
+### Port Forwarding (fallback without Ingress)
 
 ```bash
 # Traditional MVC
@@ -95,15 +153,6 @@ Then test with:
 curl http://localhost:8080/api/info
 curl http://localhost:8081/api/info
 curl http://localhost:8082/api/info
-```
-
-### Using Ingress
-
-If you've deployed the ingress and configured DNS:
-```bash
-curl http://spring-performance.example.com/mvc/api/info
-curl http://spring-performance.example.com/virtual/api/info
-curl http://spring-performance.example.com/webflux/api/info
 ```
 
 ## Scaling

@@ -3,29 +3,36 @@ kind: Ingress
 metadata:
   name: spring-performance-ingress
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
+    # Strip the path prefix before forwarding to the backend service
+    # /mvc/api/hello  -> spring-mvc-traditional:8080/api/hello
+    # /virtual/api/hello -> spring-virtual-threads:8081/api/hello
+    # /webflux/api/hello -> spring-webflux:8082/api/hello
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/use-regex: "true"
 spec:
-  ingressClassName: nginx
+  # microk8s built-in nginx ingress addon uses the "public" ingress class.
+  # metallb assigns an external LoadBalancer IP to the ingress controller service,
+  # so this ingress is reachable at that IP without any NodePort or port-forwarding.
+  ingressClassName: public
   rules:
-  - host: spring-performance.example.com
-    http:
+  - http:
       paths:
-      - path: /mvc
-        pathType: Prefix
+      - path: /mvc(/|$)(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: spring-mvc-traditional
             port:
               number: 8080
-      - path: /virtual
-        pathType: Prefix
+      - path: /virtual(/|$)(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: spring-virtual-threads
             port:
               number: 8081
-      - path: /webflux
-        pathType: Prefix
+      - path: /webflux(/|$)(.*)
+        pathType: ImplementationSpecific
         backend:
           service:
             name: spring-webflux
