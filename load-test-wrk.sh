@@ -41,6 +41,41 @@ if ! command -v wrk &> /dev/null; then
     exit 1
 fi
 
+# Function to wait for all requests to complete
+# This checks the Prometheus metrics endpoint to ensure no active requests
+wait_for_requests_to_complete() {
+    local service_path=$1
+    local max_wait=120  # Maximum wait time in seconds
+    local check_interval=2
+    local elapsed=0
+    
+    echo "Waiting for all requests to complete on ${service_path}..."
+    
+    while [ $elapsed -lt $max_wait ]; do
+        # Try to get the active request count from metrics
+        # http_server_requests_active_count is a common metric
+        local active_requests=$(curl -s "${BASE_URL}${service_path}/actuator/prometheus" 2>/dev/null | \
+            grep -E 'http_server_requests_active|tomcat_threads_busy_threads|reactor_netty_http_server_connections_active' | \
+            grep -v '#' | \
+            awk '{sum+=$NF} END {print sum+0}')
+        
+        if [ "$active_requests" = "0" ] || [ -z "$active_requests" ]; then
+            echo "✓ All requests completed (active requests: ${active_requests:-0})"
+            # Additional small sleep to ensure metric reporting has settled
+            sleep 5
+            return 0
+        fi
+        
+        echo "  Still processing... (active requests: ${active_requests}, waited ${elapsed}s)"
+        sleep $check_interval
+        elapsed=$((elapsed + check_interval))
+    done
+    
+    echo "⚠ Timeout waiting for requests to complete after ${max_wait}s"
+    # Continue anyway after timeout
+    return 0
+}
+
 # Create results directory
 RESULTS_DIR="load-test-results-$(date +%Y%m%d-%H%M%S)"
 mkdir -p $RESULTS_DIR
@@ -54,6 +89,7 @@ echo "Testing Traditional Spring MVC (/mvc)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/mvc/api/query | tee $RESULTS_DIR/mvc-traditional.txt
 echo ""
+wait_for_requests_to_complete "/mvc"
 sleep 60
 
 # Test Virtual Threads
@@ -62,6 +98,7 @@ echo "Testing Spring Virtual Threads (/virtual)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/virtual/api/query | tee $RESULTS_DIR/virtual-threads.txt
 echo ""
+wait_for_requests_to_complete "/virtual"
 sleep 60
 
 # Test WebFlux
@@ -70,6 +107,7 @@ echo "Testing Spring WebFlux (/webflux)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/webflux/api/query | tee $RESULTS_DIR/webflux.txt
 echo ""
+wait_for_requests_to_complete "/webflux"
 sleep 60
 
 # Test with high delay
@@ -78,6 +116,7 @@ echo "Testing with 500ms delay (Traditional MVC)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/mvc/api/query/500 | tee $RESULTS_DIR/mvc-traditional-500ms.txt
 echo ""
+wait_for_requests_to_complete "/mvc"
 sleep 60
 
 echo "========================================="
@@ -85,6 +124,7 @@ echo "Testing with 500ms delay (Virtual Threads)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/virtual/api/query/500 | tee $RESULTS_DIR/virtual-threads-500ms.txt
 echo ""
+wait_for_requests_to_complete "/virtual"
 sleep 60
 
 echo "========================================="
@@ -92,6 +132,7 @@ echo "Testing with 500ms delay (WebFlux)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/webflux/api/query/500 | tee $RESULTS_DIR/webflux-500ms.txt
 echo ""
+wait_for_requests_to_complete "/webflux"
 sleep 60
 
 # Test CPU endpoint
@@ -100,6 +141,7 @@ echo "Testing CPU endpoint (Traditional MVC)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/mvc/api/cpu/${CPU_DURATION_MS} | tee $RESULTS_DIR/mvc-cpu.txt
 echo ""
+wait_for_requests_to_complete "/mvc"
 sleep 60
 
 echo "========================================="
@@ -107,6 +149,7 @@ echo "Testing CPU endpoint (Virtual Threads)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/virtual/api/cpu/${CPU_DURATION_MS} | tee $RESULTS_DIR/virtual-cpu.txt
 echo ""
+wait_for_requests_to_complete "/virtual"
 sleep 60
 
 echo "========================================="
@@ -114,6 +157,7 @@ echo "Testing CPU endpoint (WebFlux)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/webflux/api/cpu/${CPU_DURATION_MS} | tee $RESULTS_DIR/webflux-cpu.txt
 echo ""
+wait_for_requests_to_complete "/webflux"
 sleep 60
 
 # Test stress endpoint
@@ -122,6 +166,7 @@ echo "Testing stress endpoint (Traditional MVC)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s "${BASE_URL}/mvc/api/stress?queries=${STRESS_QUERIES}&cpuMs=${STRESS_CPU_MS}" | tee $RESULTS_DIR/mvc-stress.txt
 echo ""
+wait_for_requests_to_complete "/mvc"
 sleep 60
 
 echo "========================================="
@@ -129,6 +174,7 @@ echo "Testing stress endpoint (Virtual Threads)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s "${BASE_URL}/virtual/api/stress?queries=${STRESS_QUERIES}&cpuMs=${STRESS_CPU_MS}" | tee $RESULTS_DIR/virtual-stress.txt
 echo ""
+wait_for_requests_to_complete "/virtual"
 sleep 60
 
 echo "========================================="
@@ -136,6 +182,7 @@ echo "Testing stress endpoint (WebFlux)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s "${BASE_URL}/webflux/api/stress?queries=${STRESS_QUERIES}&cpuMs=${STRESS_CPU_MS}" | tee $RESULTS_DIR/webflux-stress.txt
 echo ""
+wait_for_requests_to_complete "/webflux"
 
 echo "Load testing complete!"
 echo "Results saved to: $RESULTS_DIR"
