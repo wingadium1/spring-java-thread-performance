@@ -4,11 +4,31 @@
 
 This guide provides detailed information on how to conduct performance testing and interpret results for the three different Spring Boot threading models.
 
+## Deployment Modes
+
+### Local Deployment
+When running applications locally (Docker Compose or standalone), access services via direct ports:
+- Traditional MVC: `http://localhost:8080`
+- Virtual Threads: `http://localhost:8081`
+- WebFlux: `http://localhost:8082`
+
+### Kubernetes Deployment
+When deployed on Kubernetes with Ingress, access services via path-based routing:
+- Traditional MVC: `http://${LB_IP}/mvc`
+- Virtual Threads: `http://${LB_IP}/virtual`
+- WebFlux: `http://${LB_IP}/webflux`
+
+Get the LoadBalancer IP:
+```bash
+LB_IP=$(kubectl get ingress spring-performance-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+```
+
 ## Test Scenarios
 
 ### Scenario 1: Low Concurrency (100 concurrent users)
 **Goal**: Establish baseline performance under normal load
 
+**For Local Deployment:**
 ```bash
 # Using wrk
 wrk -t4 -c100 -d30s http://localhost:8080/api/query
@@ -21,6 +41,19 @@ ab -n 10000 -c 100 http://localhost:8081/api/query
 ab -n 10000 -c 100 http://localhost:8082/api/query
 ```
 
+**For Kubernetes Deployment:**
+```bash
+# Using wrk
+wrk -t4 -c100 -d30s http://${LB_IP}/mvc/api/query
+wrk -t4 -c100 -d30s http://${LB_IP}/virtual/api/query
+wrk -t4 -c100 -d30s http://${LB_IP}/webflux/api/query
+
+# Using Apache Bench
+ab -n 10000 -c 100 http://${LB_IP}/mvc/api/query
+ab -n 10000 -c 100 http://${LB_IP}/virtual/api/query
+ab -n 10000 -c 100 http://${LB_IP}/webflux/api/query
+```
+
 **Expected Results**:
 - All three approaches should perform similarly
 - Traditional MVC may have a slight edge due to simplicity
@@ -30,10 +63,18 @@ ab -n 10000 -c 100 http://localhost:8082/api/query
 ### Scenario 2: Medium Concurrency (500 concurrent users)
 **Goal**: Test behavior as load increases
 
+**For Local Deployment:**
 ```bash
 wrk -t8 -c500 -d60s http://localhost:8080/api/query
 wrk -t8 -c500 -d60s http://localhost:8081/api/query
 wrk -t8 -c500 -d60s http://localhost:8082/api/query
+```
+
+**For Kubernetes Deployment:**
+```bash
+wrk -t8 -c500 -d60s http://${LB_IP}/mvc/api/query
+wrk -t8 -c500 -d60s http://${LB_IP}/virtual/api/query
+wrk -t8 -c500 -d60s http://${LB_IP}/webflux/api/query
 ```
 
 **Expected Results**:
@@ -52,10 +93,18 @@ wrk -t8 -c500 -d60s http://localhost:8082/api/query
 ### Scenario 3: High Concurrency (1000+ concurrent users)
 **Goal**: Test maximum capacity
 
+**For Local Deployment:**
 ```bash
 wrk -t8 -c1000 -d60s http://localhost:8080/api/query
 wrk -t8 -c1000 -d60s http://localhost:8081/api/query
 wrk -t8 -c1000 -d60s http://localhost:8082/api/query
+```
+
+**For Kubernetes Deployment:**
+```bash
+wrk -t8 -c1000 -d60s http://${LB_IP}/mvc/api/query
+wrk -t8 -c1000 -d60s http://${LB_IP}/virtual/api/query
+wrk -t8 -c1000 -d60s http://${LB_IP}/webflux/api/query
 ```
 
 **Expected Results**:
@@ -80,10 +129,18 @@ wrk -t8 -c1000 -d60s http://localhost:8082/api/query
 ### Scenario 4: Long-Running Operations (500ms delay)
 **Goal**: Test with longer blocking operations
 
+**For Local Deployment:**
 ```bash
 wrk -t8 -c500 -d60s http://localhost:8080/api/query/500
 wrk -t8 -c500 -d60s http://localhost:8081/api/query/500
 wrk -t8 -c500 -d60s http://localhost:8082/api/query/500
+```
+
+**For Kubernetes Deployment:**
+```bash
+wrk -t8 -c500 -d60s http://${LB_IP}/mvc/api/query/500
+wrk -t8 -c500 -d60s http://${LB_IP}/virtual/api/query/500
+wrk -t8 -c500 -d60s http://${LB_IP}/webflux/api/query/500
 ```
 
 **Expected Results**:
@@ -132,8 +189,11 @@ docker stats
 # Check JVM heap usage
 jmap -heap <pid>
 
-# Or via actuator
+# Or via actuator (local deployment)
 curl http://localhost:8080/actuator/metrics/jvm.memory.used
+
+# Or via actuator (Kubernetes deployment)
+curl http://${LB_IP}/mvc/actuator/metrics/jvm.memory.used
 ```
 
 **Expected Memory Usage**:
@@ -143,8 +203,11 @@ curl http://localhost:8080/actuator/metrics/jvm.memory.used
 
 #### Thread Count
 ```bash
-# Via actuator
+# Via actuator (local deployment)
 curl http://localhost:8080/actuator/metrics/jvm.threads.live
+
+# Via actuator (Kubernetes deployment)
+curl http://${LB_IP}/mvc/actuator/metrics/jvm.threads.live
 
 # Via jstack
 jstack <pid> | grep "Thread" | wc -l
