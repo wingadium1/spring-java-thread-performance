@@ -14,6 +14,10 @@
 #   GET /api/query/{delay}     - Database query with artificial delay (ms)
 #   GET /api/cpu/{durationMs}  - CPU-intensive work for specified duration
 #   GET /api/stress?queries=N&cpuMs=M  - Combined stress test (I/O + CPU + memory)
+#
+# Metrics endpoints (used for request completion verification):
+#   GET /actuator/prometheus   - Prometheus metrics (accessible via ingress at /mvc/actuator/prometheus, etc.)
+#   GET /actuator/health       - Health check endpoint
 
 THREADS=${1:-4}
 CONNECTIONS=${2:-100}

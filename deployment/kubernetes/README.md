@@ -124,6 +124,33 @@ curl http://${LB_IP}/virtual/api/hello
 curl http://${LB_IP}/webflux/api/hello
 ```
 
+### Actuator Endpoints
+
+All Spring Boot applications expose actuator endpoints for monitoring and health checks.
+These are accessible through the ingress with the same path prefix:
+
+```bash
+# Health check endpoints (used by Kubernetes liveness/readiness probes)
+curl http://${LB_IP}/mvc/actuator/health
+curl http://${LB_IP}/virtual/actuator/health
+curl http://${LB_IP}/webflux/actuator/health
+
+# Prometheus metrics endpoints (used by Prometheus scraping and load test verification)
+curl http://${LB_IP}/mvc/actuator/prometheus
+curl http://${LB_IP}/virtual/actuator/prometheus
+curl http://${LB_IP}/webflux/actuator/prometheus
+
+# Application info
+curl http://${LB_IP}/mvc/actuator/info
+curl http://${LB_IP}/virtual/actuator/info
+curl http://${LB_IP}/webflux/actuator/info
+```
+
+**Note:** The `/actuator/prometheus` endpoint is used by the load test script's 
+`wait_for_requests_to_complete()` function to verify that all requests from the 
+previous test have finished before starting the next test. This ensures test isolation 
+and reproducible performance measurements.
+
 ### Port Forwarding (fallback without Ingress)
 
 ```bash
