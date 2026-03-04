@@ -54,7 +54,7 @@ echo "Testing Traditional Spring MVC (/mvc)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/mvc/api/query | tee $RESULTS_DIR/mvc-traditional.txt
 echo ""
-sleep 5
+sleep 60
 
 # Test Virtual Threads
 echo "========================================="
@@ -62,7 +62,7 @@ echo "Testing Spring Virtual Threads (/virtual)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/virtual/api/query | tee $RESULTS_DIR/virtual-threads.txt
 echo ""
-sleep 5
+sleep 60
 
 # Test WebFlux
 echo "========================================="
@@ -70,6 +70,7 @@ echo "Testing Spring WebFlux (/webflux)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/webflux/api/query | tee $RESULTS_DIR/webflux.txt
 echo ""
+sleep 60
 
 # Test with high delay
 echo "========================================="
@@ -77,20 +78,21 @@ echo "Testing with 500ms delay (Traditional MVC)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/mvc/api/query/500 | tee $RESULTS_DIR/mvc-traditional-500ms.txt
 echo ""
-sleep 5
+sleep 60
 
 echo "========================================="
 echo "Testing with 500ms delay (Virtual Threads)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/virtual/api/query/500 | tee $RESULTS_DIR/virtual-threads-500ms.txt
 echo ""
-sleep 5
+sleep 60
 
 echo "========================================="
 echo "Testing with 500ms delay (WebFlux)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/webflux/api/query/500 | tee $RESULTS_DIR/webflux-500ms.txt
 echo ""
+sleep 60
 
 # Test CPU endpoint
 echo "========================================="
@@ -98,21 +100,21 @@ echo "Testing CPU endpoint (Traditional MVC)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/mvc/api/cpu/${CPU_DURATION_MS} | tee $RESULTS_DIR/mvc-cpu.txt
 echo ""
-sleep 5
+sleep 60
 
 echo "========================================="
 echo "Testing CPU endpoint (Virtual Threads)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/virtual/api/cpu/${CPU_DURATION_MS} | tee $RESULTS_DIR/virtual-cpu.txt
 echo ""
-sleep 5
+sleep 60
 
 echo "========================================="
 echo "Testing CPU endpoint (WebFlux)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/webflux/api/cpu/${CPU_DURATION_MS} | tee $RESULTS_DIR/webflux-cpu.txt
 echo ""
-sleep 5
+sleep 60
 
 # Test stress endpoint
 echo "========================================="
@@ -120,14 +122,14 @@ echo "Testing stress endpoint (Traditional MVC)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s "${BASE_URL}/mvc/api/stress?queries=${STRESS_QUERIES}&cpuMs=${STRESS_CPU_MS}" | tee $RESULTS_DIR/mvc-stress.txt
 echo ""
-sleep 5
+sleep 60
 
 echo "========================================="
 echo "Testing stress endpoint (Virtual Threads)"
 echo "========================================="
 wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s "${BASE_URL}/virtual/api/stress?queries=${STRESS_QUERIES}&cpuMs=${STRESS_CPU_MS}" | tee $RESULTS_DIR/virtual-stress.txt
 echo ""
-sleep 5
+sleep 60
 
 echo "========================================="
 echo "Testing stress endpoint (WebFlux)"
