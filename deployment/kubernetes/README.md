@@ -124,17 +124,6 @@ curl http://${LB_IP}/virtual/api/hello
 curl http://${LB_IP}/webflux/api/hello
 ```
 
-### Load Testing with wrk
-
-```bash
-LB_IP=$(kubectl get ingress spring-performance-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-
-# 4 threads, 100 concurrent connections, 30-second run
-wrk -t4 -c100 -d30s http://${LB_IP}/mvc/api/query
-wrk -t4 -c100 -d30s http://${LB_IP}/virtual/api/query
-wrk -t4 -c100 -d30s http://${LB_IP}/webflux/api/query
-```
-
 ### Port Forwarding (fallback without Ingress)
 
 ```bash
