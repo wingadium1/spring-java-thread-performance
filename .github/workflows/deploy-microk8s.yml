@@ -108,8 +108,11 @@ jobs:
             microk8s kubectl apply -f spring-virtual-threads.yaml
             microk8s kubectl apply -f spring-webflux.yaml
             
-            # Apply ingress if needed (uncomment if you want ingress)
-            # microk8s kubectl apply -f ingress.yaml
+            # Apply ingress (requires microk8s addons: ingress, metallb)
+            microk8s kubectl apply -f ingress.yaml
+
+            # Apply HPA for all deployments (requires metrics-server addon)
+            microk8s kubectl apply -f hpa.yaml
             
             echo "Waiting for deployments to be ready..."
             microk8s kubectl wait --for=condition=available --timeout=300s deployment/spring-mvc-traditional
@@ -148,6 +151,14 @@ jobs:
             echo ""
             echo "=== Endpoints ==="
             microk8s kubectl get endpoints
+
+            echo ""
+            echo "=== Ingress ==="
+            microk8s kubectl get ingress
+
+            echo ""
+            echo "=== HPA ==="
+            microk8s kubectl get hpa
           ENDSSH
       
       - name: Display access information
@@ -166,20 +177,24 @@ jobs:
           ssh "${SSH_OPTS[@]}" "$MICROK8S_USER@$MICROK8S_HOST" << 'ENDSSH'
             echo ""
             echo "=== Access Information ==="
-            echo "To access services from your local machine:"
             echo ""
-            
-            # Get NodePort if services are NodePort type
-            MVC_PORT=$(microk8s kubectl get service spring-mvc-traditional -o jsonpath='{.spec.ports[0].nodePort}')
-            VIRTUAL_PORT=$(microk8s kubectl get service spring-virtual-threads -o jsonpath='{.spec.ports[0].nodePort}')
-            WEBFLUX_PORT=$(microk8s kubectl get service spring-webflux -o jsonpath='{.spec.ports[0].nodePort}')
-            
-            if [ -n "$MVC_PORT" ]; then
-              echo "Spring MVC Traditional: http://$(hostname -I | awk '{print $1}'):$MVC_PORT"
-              echo "Spring Virtual Threads: http://$(hostname -I | awk '{print $1}'):$VIRTUAL_PORT"
-              echo "Spring WebFlux: http://$(hostname -I | awk '{print $1}'):$WEBFLUX_PORT"
+
+            # Prefer the ingress LoadBalancer IP assigned by metallb
+            INGRESS_IP=$(microk8s kubectl get ingress spring-performance-ingress \
+              -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+
+            if [ -n "$INGRESS_IP" ]; then
+              echo "Ingress LoadBalancer IP (metallb): $INGRESS_IP"
+              echo ""
+              echo "Service endpoints via Ingress:"
+              echo "  Spring MVC Traditional : http://${INGRESS_IP}/mvc/api/hello"
+              echo "  Spring Virtual Threads : http://${INGRESS_IP}/virtual/api/hello"
+              echo "  Spring WebFlux         : http://${INGRESS_IP}/webflux/api/hello"
             else
-              echo "Services are ClusterIP type. Use port-forwarding:"
+              echo "Ingress IP not yet assigned. Check: microk8s kubectl get ingress"
+              echo "Ensure addons are enabled:  microk8s enable ingress metallb"
+              echo ""
+              echo "Fallback - port-forwarding:"
               echo "  microk8s kubectl port-forward service/spring-mvc-traditional 8080:8080"
               echo "  microk8s kubectl port-forward service/spring-virtual-threads 8081:8081"
               echo "  microk8s kubectl port-forward service/spring-webflux 8082:8082"
