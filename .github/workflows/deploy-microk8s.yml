@@ -110,6 +110,9 @@ jobs:
             
             # Apply ingress (requires microk8s addons: ingress, metallb)
             microk8s kubectl apply -f ingress.yaml
+
+            # Apply HPA for all deployments (requires metrics-server addon)
+            microk8s kubectl apply -f hpa.yaml
             
             echo "Waiting for deployments to be ready..."
             microk8s kubectl wait --for=condition=available --timeout=300s deployment/spring-mvc-traditional
@@ -152,6 +155,10 @@ jobs:
             echo ""
             echo "=== Ingress ==="
             microk8s kubectl get ingress
+
+            echo ""
+            echo "=== HPA ==="
+            microk8s kubectl get hpa
           ENDSSH
       
       - name: Display access information

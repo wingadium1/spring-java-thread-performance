@@ -161,11 +161,15 @@ kubectl scale deployment spring-webflux --replicas=5
 
 ### Auto-scaling (HPA)
 
+HPA is enabled for all deployments via `hpa.yaml` (CPU target: 70%, min: 2, max: 10 replicas).
+Requires the metrics-server addon: `microk8s enable metrics-server`
+
 ```bash
-# Enable horizontal pod autoscaling
-kubectl autoscale deployment spring-mvc-traditional --cpu-percent=70 --min=2 --max=10
-kubectl autoscale deployment spring-virtual-threads --cpu-percent=70 --min=2 --max=10
-kubectl autoscale deployment spring-webflux --cpu-percent=70 --min=2 --max=10
+# View HPA status
+kubectl get hpa
+
+# Apply HPA manifests manually
+kubectl apply -f deployment/kubernetes/hpa.yaml
 ```
 
 ## Resource Management
@@ -193,6 +197,7 @@ kubectl delete -f deployment/kubernetes/spring-mvc-traditional.yaml
 kubectl delete -f deployment/kubernetes/spring-virtual-threads.yaml
 kubectl delete -f deployment/kubernetes/spring-webflux.yaml
 kubectl delete -f deployment/kubernetes/ingress.yaml
+kubectl delete -f deployment/kubernetes/hpa.yaml
 ```
 
 ## Monitoring
