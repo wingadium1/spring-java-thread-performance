@@ -184,21 +184,44 @@ All three applications expose the same REST API endpoints:
 
 ### Simple Test
 
+**For Local Deployment (Docker Compose or standalone):**
+
 ```bash
-# Test Traditional MVC
+# Test Traditional MVC (port 8080)
 curl http://localhost:8080/api/query
 curl http://localhost:8080/api/info
 
-# Test Virtual Threads
+# Test Virtual Threads (port 8081)
 curl http://localhost:8081/api/query
 curl http://localhost:8081/api/info
 
-# Test WebFlux
+# Test WebFlux (port 8082)
 curl http://localhost:8082/api/query
 curl http://localhost:8082/api/info
 ```
 
+**For Kubernetes Deployment (using Ingress path-based routing):**
+
+```bash
+# Get the LoadBalancer IP
+LB_IP=$(kubectl get ingress spring-performance-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+# Test Traditional MVC (path: /mvc/)
+curl http://${LB_IP}/mvc/api/query
+curl http://${LB_IP}/mvc/api/info
+
+# Test Virtual Threads (path: /virtual/)
+curl http://${LB_IP}/virtual/api/query
+curl http://${LB_IP}/virtual/api/info
+
+# Test WebFlux (path: /webflux/)
+curl http://${LB_IP}/webflux/api/query
+curl http://${LB_IP}/webflux/api/info
+```
+
 ### Load Testing with Apache Bench
+
+**For Local Deployment:**
 
 ```bash
 # Install Apache Bench
@@ -215,7 +238,25 @@ ab -n 1000 -c 50 http://localhost:8081/api/query
 ab -n 1000 -c 50 http://localhost:8082/api/query
 ```
 
+**For Kubernetes Deployment:**
+
+```bash
+# Get the LoadBalancer IP
+LB_IP=$(kubectl get ingress spring-performance-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+# Test Traditional MVC (1000 requests, 50 concurrent)
+ab -n 1000 -c 50 http://${LB_IP}/mvc/api/query
+
+# Test Virtual Threads (1000 requests, 50 concurrent)
+ab -n 1000 -c 50 http://${LB_IP}/virtual/api/query
+
+# Test WebFlux (1000 requests, 50 concurrent)
+ab -n 1000 -c 50 http://${LB_IP}/webflux/api/query
+```
+
 ### Load Testing with wrk
+
+**For Local Deployment:**
 
 ```bash
 # Install wrk
@@ -231,6 +272,35 @@ wrk -t4 -c100 -d30s http://localhost:8082/api/query
 wrk -t8 -c500 -d60s http://localhost:8080/api/query
 wrk -t8 -c500 -d60s http://localhost:8081/api/query
 wrk -t8 -c500 -d60s http://localhost:8082/api/query
+```
+
+**For Kubernetes Deployment:**
+
+```bash
+# Get the LoadBalancer IP
+LB_IP=$(kubectl get ingress spring-performance-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+
+# Test with 4 threads, 100 connections for 30 seconds
+wrk -t4 -c100 -d30s http://${LB_IP}/mvc/api/query
+wrk -t4 -c100 -d30s http://${LB_IP}/virtual/api/query
+wrk -t4 -c100 -d30s http://${LB_IP}/webflux/api/query
+
+# Test with higher load (8 threads, 500 connections)
+wrk -t8 -c500 -d60s http://${LB_IP}/mvc/api/query
+wrk -t8 -c500 -d60s http://${LB_IP}/virtual/api/query
+wrk -t8 -c500 -d60s http://${LB_IP}/webflux/api/query
+```
+
+**For Automated Load Testing:**
+
+See the included `load-test-wrk.sh` script for comprehensive automated testing:
+
+```bash
+# For local deployment
+./load-test-wrk.sh 4 100 30 http://localhost
+
+# For Kubernetes deployment
+./load-test-wrk.sh 4 100 30 http://${LB_IP}
 ```
 
 ## Monitoring
