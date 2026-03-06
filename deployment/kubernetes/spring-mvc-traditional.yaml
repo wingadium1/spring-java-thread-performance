@@ -5,7 +5,7 @@ metadata:
   labels:
     app: spring-mvc-traditional
 spec:
-  replicas: 2
+  replicas: 4
   selector:
     matchLabels:
       app: spring-mvc-traditional
@@ -22,11 +22,22 @@ spec:
           name: http
         env:
         - name: JAVA_TOOL_OPTIONS
-          value: "-Xms512m -Xmx2g"
+          # UseContainerSupport ensures JVM reads CPU/memory limits from cgroup.
+          # Heap set to 75 % of the 2 Gi container limit; 25 % left for off-heap,
+          # Metaspace, native Tomcat threads, and NIO buffers.
+          # Tomcat thread-pool capped at 200 (default); tune SERVER_TOMCAT_THREADS_MAX
+          # to experiment with thread exhaustion vs. concurrency behaviour.
+          value: "-XX:+UseContainerSupport -XX:InitialRAMPercentage=25.0 -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
+        - name: SERVER_TOMCAT_THREADS_MAX
+          value: "200"
+        - name: SERVER_TOMCAT_THREADS_MIN_SPARE
+          value: "10"
         resources:
           requests:
-            memory: "512Mi"
-            cpu: "500m"
+            # 1 CPU guaranteed per pod → scheduler ensures the pod has CPU headroom.
+            # Burstable to 2 CPUs under low-competition to allow realistic peak throughput.
+            memory: "1Gi"
+            cpu: "1000m"
           limits:
             memory: "2Gi"
             cpu: "2000m"
