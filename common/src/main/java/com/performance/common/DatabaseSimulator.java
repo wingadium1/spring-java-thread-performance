@@ -1,12 +1,13 @@
 package com.performance.common;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Service that simulates database operations with configurable delay and CPU/memory load.
@@ -26,6 +27,11 @@ public class DatabaseSimulator {
     private final long minDelayMs;
     private final long maxDelayMs;
     private final WorkloadProfile profile;
+
+    private final Timer queryTimer;
+    private final Timer queryWithDelayTimer;
+    private final Timer multipleQueriesTimer;
+    private final Timer cpuWorkTimer;
     
     public enum WorkloadProfile {
         /** Light I/O only - 10-50ms delay, minimal CPU/memory */
@@ -68,23 +74,63 @@ public class DatabaseSimulator {
     }
     
     public DatabaseSimulator() {
-        this(50, 200, WorkloadProfile.MEDIUM);
+        this(WorkloadProfile.MEDIUM, null);
     }
     
     public DatabaseSimulator(WorkloadProfile profile) {
+        this(profile, null);
+    }
+
+    public DatabaseSimulator(WorkloadProfile profile, MeterRegistry meterRegistry) {
         this.minDelayMs = profile.minIoMs;
         this.maxDelayMs = profile.maxIoMs;
         this.profile = profile;
+
+        if (meterRegistry != null) {
+            this.queryTimer = Timer.builder("db.query.duration")
+                    .description("Time spent executing a simulated database query")
+                    .tag("type", "single")
+                    .register(meterRegistry);
+            this.queryWithDelayTimer = Timer.builder("db.query.duration")
+                    .description("Time spent executing a simulated database query with custom delay")
+                    .tag("type", "custom-delay")
+                    .register(meterRegistry);
+            this.multipleQueriesTimer = Timer.builder("db.query.duration")
+                    .description("Time spent executing multiple sequential simulated queries")
+                    .tag("type", "multiple")
+                    .register(meterRegistry);
+            this.cpuWorkTimer = Timer.builder("db.cpu.work.duration")
+                    .description("Time spent executing CPU-intensive simulated work")
+                    .register(meterRegistry);
+        } else {
+            this.queryTimer = null;
+            this.queryWithDelayTimer = null;
+            this.multipleQueriesTimer = null;
+            this.cpuWorkTimer = null;
+        }
     }
     
+    /**
+     * @deprecated Use {@link #DatabaseSimulator(long, long, WorkloadProfile)} instead.
+     */
+    @Deprecated
     public DatabaseSimulator(long minDelayMs, long maxDelayMs) {
         this(minDelayMs, maxDelayMs, WorkloadProfile.MEDIUM);
     }
     
+    /**
+     * Creates a DatabaseSimulator with explicit delay bounds and workload profile.
+     * Note: metrics will not be recorded without a MeterRegistry.
+     * Prefer {@link #DatabaseSimulator(WorkloadProfile, MeterRegistry)} when possible.
+     */
     public DatabaseSimulator(long minDelayMs, long maxDelayMs, WorkloadProfile profile) {
         this.minDelayMs = minDelayMs;
         this.maxDelayMs = maxDelayMs;
         this.profile = profile;
+        this.queryTimer = null;
+        this.queryWithDelayTimer = null;
+        this.multipleQueriesTimer = null;
+        this.cpuWorkTimer = null;
     }
     
     /**
@@ -95,6 +141,13 @@ public class DatabaseSimulator {
      * @return Simulated query result
      */
     public String executeQuery(String queryName) {
+        if (queryTimer != null) {
+            return queryTimer.record(() -> doExecuteQuery(queryName));
+        }
+        return doExecuteQuery(queryName);
+    }
+
+    private String doExecuteQuery(String queryName) {
         long startTime = System.currentTimeMillis();
         
         // 1. Simulate I/O wait (network/disk latency)
@@ -190,6 +243,13 @@ public class DatabaseSimulator {
      * @return Simulated query result
      */
     public String executeQueryWithDelay(String queryName, long delayMs) {
+        if (queryWithDelayTimer != null) {
+            return queryWithDelayTimer.record(() -> doExecuteQueryWithDelay(queryName, delayMs));
+        }
+        return doExecuteQueryWithDelay(queryName, delayMs);
+    }
+
+    private String doExecuteQueryWithDelay(String queryName, long delayMs) {
         long startTime = System.currentTimeMillis();
         
         try {
@@ -218,6 +278,13 @@ public class DatabaseSimulator {
      * @return Combined result
      */
     public String executeMultipleQueries(int count) {
+        if (multipleQueriesTimer != null) {
+            return multipleQueriesTimer.record(() -> doExecuteMultipleQueries(count));
+        }
+        return doExecuteMultipleQueries(count);
+    }
+
+    private String doExecuteMultipleQueries(int count) {
         long startTime = System.currentTimeMillis();
         long totalIoTime = 0;
         long totalCpuTime = 0;
@@ -254,6 +321,13 @@ public class DatabaseSimulator {
      * @return Result description
      */
     public String executeCpuIntensiveWork(long durationMs) {
+        if (cpuWorkTimer != null) {
+            return cpuWorkTimer.record(() -> doExecuteCpuIntensiveWork(durationMs));
+        }
+        return doExecuteCpuIntensiveWork(durationMs);
+    }
+
+    private String doExecuteCpuIntensiveWork(long durationMs) {
         long startTime = System.currentTimeMillis();
         long endTime = startTime + durationMs;
         
