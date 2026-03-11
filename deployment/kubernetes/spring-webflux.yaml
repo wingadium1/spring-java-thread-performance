@@ -5,7 +5,7 @@ metadata:
   labels:
     app: spring-webflux
 spec:
-  replicas: 2
+  replicas: 4
   selector:
     matchLabels:
       app: spring-webflux
@@ -22,11 +22,17 @@ spec:
           name: http
         env:
         - name: JAVA_TOOL_OPTIONS
-          value: "-Xms512m -Xmx2g"
+          # Reactor Netty I/O worker threads default to availableProcessors() × 2,
+          # capped by the CPU limit (2 CPUs → 4 event-loop threads by default).
+          # WebFlux typically needs less heap than MVC because it avoids large
+          # per-thread stacks and Tomcat NIO buffers, but we keep the same budget
+          # for a fair memory comparison.  Lower initial allocation (-25 %) means
+          # the JVM yields unused RSS to the kernel faster after GC.
+          value: "-XX:+UseContainerSupport -XX:InitialRAMPercentage=25.0 -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError"
         resources:
           requests:
-            memory: "512Mi"
-            cpu: "500m"
+            memory: "1Gi"
+            cpu: "1000m"
           limits:
             memory: "2Gi"
             cpu: "2000m"
