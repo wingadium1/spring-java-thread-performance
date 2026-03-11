@@ -156,6 +156,90 @@ wrk -t8 -c500 -d60s http://${LB_IP}/webflux/api/query/500
   - Efficient handling of async operations
   - Throughput: ~1000+ req/sec
 
+### Scenario 5: True Non-Blocking Wait (`/api/wait/{delayMs}`)
+**Goal**: Highlight the value of `WebFlux` when requests spend most of their lifetime waiting non-blockingly.
+
+This scenario is different from `/api/query/{delay}`:
+- MVC and Virtual Threads use blocking `Thread.sleep(...)`
+- WebFlux uses `Mono.delay(...)`, which does not block a worker thread while waiting
+
+**For Local Deployment:**
+```bash
+wrk -t8 -c1000 -d60s http://localhost:8080/api/wait/1000
+wrk -t8 -c1000 -d60s http://localhost:8081/api/wait/1000
+wrk -t8 -c1000 -d60s http://localhost:8082/api/wait/1000
+```
+
+**For Kubernetes Deployment:**
+```bash
+wrk -t8 -c1000 -d60s http://${LB_IP}/mvc/api/wait/1000
+wrk -t8 -c1000 -d60s http://${LB_IP}/virtual/api/wait/1000
+wrk -t8 -c1000 -d60s http://${LB_IP}/webflux/api/wait/1000
+```
+
+**What to compare**:
+- throughput
+- p95 / p99 latency
+- live thread count
+- memory usage
+- timeout rate
+
+**Expected Results**:
+- **Traditional MVC**:
+  - hits servlet thread limits first
+  - latency rises quickly under large waiting concurrency
+  - error or timeout risk increases once worker threads are exhausted
+
+- **Virtual Threads**:
+  - handles waiting concurrency much better than MVC
+  - preserves blocking code style
+  - thread usage can still grow with request volume, but much more economically than platform threads
+
+- **WebFlux**:
+  - should show its clearest advantage here
+  - uses very few worker threads even with many waiting requests
+  - should have the best thread efficiency and often the best memory efficiency in this scenario
+
+For a ready-to-run version of this benchmark, see [WEBFLUX-SHOWCASE-TEST.md](WEBFLUX-SHOWCASE-TEST.md) and [test-webflux-showcase.sh](test-webflux-showcase.sh).
+
+### Scenario 6: Reactive Streaming with SSE (`/api/sse/{events}`)
+**Goal**: Highlight where `WebFlux` shines most clearly: long-lived streams and many concurrent waiting connections.
+
+This scenario keeps a connection open and emits events at a fixed interval.
+
+- MVC uses `SseEmitter` and keeps a request open with platform-thread-oriented processing
+- Virtual Threads also keeps a blocking-style request lifecycle, but with cheaper threads
+- WebFlux emits a reactive stream over time using `Flux.interval(...)`
+
+**Functional test:**
+```bash
+curl -N http://localhost:8080/api/sse/5?intervalMs=1000
+curl -N http://localhost:8081/api/sse/5?intervalMs=1000
+curl -N http://localhost:8082/api/sse/5?intervalMs=1000
+```
+
+**What to compare under load:**
+- number of concurrent open streams
+- live thread count
+- memory usage
+- stability over long-lived connections
+
+**Expected Results**:
+- **Traditional MVC**:
+  - reaches thread-related overhead first on many concurrent streams
+  - good for small and moderate SSE usage, but less ideal for very large waiting fan-out
+
+- **Virtual Threads**:
+  - better than MVC for many open streaming connections
+  - easier migration path when the application is still written in blocking style
+
+- **WebFlux**:
+  - should stand out most strongly here
+  - long-lived streams map naturally to reactive pipelines
+  - best fit when the application has many concurrent waiting clients and event-style delivery
+
+For result reporting, use [summarize-wrk-results.sh](summarize-wrk-results.sh) on any `wrk` result directory to build a Markdown or CSV summary automatically.
+
 ## Key Metrics to Monitor
 
 ### 1. Throughput (Requests/sec)
@@ -353,6 +437,40 @@ Transfer/sec:    174.50KB
 - [ ] Document all test parameters and results
 - [ ] Compare results across implementations
 - [ ] Identify bottlenecks and optimization opportunities
+
+## Recommended Full Regression Run
+
+To rerun the main comparison scenarios in one pass, use [load-test-wrk.sh](load-test-wrk.sh).
+
+It now executes:
+- standard blocking query
+- long blocking query (`500ms`)
+- CPU-intensive endpoint
+- mixed stress endpoint
+- non-blocking wait showcase
+
+Example:
+
+```bash
+./load-test-wrk.sh 8 200 60 http://${LB_IP}
+```
+
+Useful overrides:
+
+```bash
+CPU_DURATION_MS=100 \
+STRESS_QUERIES=5 \
+STRESS_CPU_MS=100 \
+WAIT_DELAY_MS=1000 \
+SETTLE_SECONDS=5 \
+./load-test-wrk.sh 8 200 60 http://${LB_IP}
+```
+
+After the run, summarize results with:
+
+```bash
+./summarize-wrk-results.sh <results_dir> markdown
+```
 
 ## Additional Resources
 

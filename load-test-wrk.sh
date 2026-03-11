@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Advanced load testing script using wrk
 # Usage: ./load-test-wrk.sh [threads] [connections] [duration] [base_url] [cpu_duration_ms] [stress_queries] [stress_cpu_ms]
 #
@@ -10,14 +12,12 @@
 #   /webflux/api/... -> spring-webflux
 #
 # Tested endpoints:
-#   GET /api/query             - Simple database query
-#   GET /api/query/{delay}     - Database query with artificial delay (ms)
-#   GET /api/cpu/{durationMs}  - CPU-intensive work for specified duration
-#   GET /api/stress?queries=N&cpuMs=M  - Combined stress test (I/O + CPU + memory)
-#
-# Metrics endpoints (used for request completion verification):
-#   GET /actuator/prometheus   - Prometheus metrics (accessible via ingress at /mvc/actuator/prometheus, etc.)
-#   GET /actuator/health       - Health check endpoint
+#   GET /api/query                    - Simple database query
+#   GET /api/query/{delay}            - Database query with artificial delay (ms)
+#   GET /api/cpu/{durationMs}         - CPU-intensive work for specified duration
+#   GET /api/stress?queries=N&cpuMs=M - Combined stress test (I/O + CPU + memory)
+#   GET /api/wait/{delayMs}           - Wait endpoint (blocking in MVC/Virtual, non-blocking in WebFlux)
+#   GET /api/sse/{events}?intervalMs= - SSE/streaming endpoint comparison
 
 THREADS=${1:-4}
 CONNECTIONS=${2:-100}
@@ -26,6 +26,10 @@ BASE_URL=${4:-http://localhost}
 CPU_DURATION_MS=${5:-100}
 STRESS_QUERIES=${6:-5}
 STRESS_CPU_MS=${7:-100}
+WAIT_DELAY_MS=${WAIT_DELAY_MS:-1000}
+SSE_EVENTS=${SSE_EVENTS:-10}
+SSE_INTERVAL_MS=${SSE_INTERVAL_MS:-100}
+SETTLE_SECONDS=${SETTLE_SECONDS:-15}
 
 echo "Load Testing Configuration:"
 echo "  Threads: $THREADS"
@@ -35,6 +39,9 @@ echo "  Base URL: $BASE_URL"
 echo "  CPU Duration: ${CPU_DURATION_MS}ms"
 echo "  Stress Queries: $STRESS_QUERIES"
 echo "  Stress CPU: ${STRESS_CPU_MS}ms"
+echo "  Wait Delay: ${WAIT_DELAY_MS}ms"
+echo "  SSE Events: ${SSE_EVENTS}"
+echo "  SSE Interval: ${SSE_INTERVAL_MS}ms"
 echo ""
 
 # Check if wrk is installed
@@ -82,140 +89,91 @@ wait_for_requests_to_complete() {
 
 # Create results directory
 RESULTS_DIR="load-test-results-$(date +%Y%m%d-%H%M%S)"
-mkdir -p $RESULTS_DIR
+mkdir -p "$RESULTS_DIR"
 
 echo "Results will be saved to: $RESULTS_DIR"
 echo ""
 
-# Test Traditional MVC
-echo "========================================="
-echo "Testing Traditional Spring MVC (/mvc)"
-echo "========================================="
-wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/mvc/api/query | tee $RESULTS_DIR/mvc-traditional.txt
-echo ""
-wait_for_requests_to_complete "/mvc"
-sleep 60
+run_case() {
+    local label="$1"
+    local path="$2"
+    local output_file="$RESULTS_DIR/$3"
+    local service_prefix="$4"
 
-# Test Virtual Threads
-echo "========================================="
-echo "Testing Spring Virtual Threads (/virtual)"
-echo "========================================="
-wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/virtual/api/query | tee $RESULTS_DIR/virtual-threads.txt
-echo ""
-wait_for_requests_to_complete "/virtual"
-sleep 60
+    echo "========================================="
+    echo "$label"
+    echo "========================================="
+    wrk --latency -t"$THREADS" -c"$CONNECTIONS" -d"${DURATION}s" "$BASE_URL/$path" | tee "$output_file"
+    echo ""
 
-# Test WebFlux
-echo "========================================="
-echo "Testing Spring WebFlux (/webflux)"
-echo "========================================="
-wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/webflux/api/query | tee $RESULTS_DIR/webflux.txt
-echo ""
-wait_for_requests_to_complete "/webflux"
-sleep 60
+    wait_for_requests_to_complete "$service_prefix"
+    sleep "$SETTLE_SECONDS"
+}
 
-# Test with high delay
-echo "========================================="
-echo "Testing with 500ms delay (Traditional MVC)"
-echo "========================================="
-wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/mvc/api/query/500 | tee $RESULTS_DIR/mvc-traditional-500ms.txt
+echo "Scenario set:"
+echo "  1. Standard query"
+echo "  2. Delayed query (500ms)"
+echo "  3. CPU-intensive endpoint (${CPU_DURATION_MS}ms)"
+echo "  4. Mixed stress workload (queries=${STRESS_QUERIES}, cpuMs=${STRESS_CPU_MS})"
+echo "  5. Wait endpoint showcase (${WAIT_DELAY_MS}ms)"
+echo "  6. SSE streaming (${SSE_EVENTS} events, ${SSE_INTERVAL_MS}ms interval)"
 echo ""
-wait_for_requests_to_complete "/mvc"
-sleep 60
+run_case "Testing Traditional Spring MVC query (/mvc/api/query)" \
+    "mvc/api/query" "mvc-traditional.txt" "/mvc"
+run_case "Testing Spring Virtual Threads query (/virtual/api/query)" \
+    "virtual/api/query" "virtual-threads.txt" "/virtual"
+run_case "Testing Spring WebFlux query (/webflux/api/query)" \
+    "webflux/api/query" "webflux.txt" "/webflux"
 
-echo "========================================="
-echo "Testing with 500ms delay (Virtual Threads)"
-echo "========================================="
-wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/virtual/api/query/500 | tee $RESULTS_DIR/virtual-threads-500ms.txt
-echo ""
-wait_for_requests_to_complete "/virtual"
-sleep 60
+run_case "Testing Traditional MVC 500ms query (/mvc/api/query/500)" \
+    "mvc/api/query/500" "mvc-traditional-500ms.txt" "/mvc"
+run_case "Testing Virtual Threads 500ms query (/virtual/api/query/500)" \
+    "virtual/api/query/500" "virtual-threads-500ms.txt" "/virtual"
+run_case "Testing WebFlux 500ms query (/webflux/api/query/500)" \
+    "webflux/api/query/500" "webflux-500ms.txt" "/webflux"
 
-echo "========================================="
-echo "Testing with 500ms delay (WebFlux)"
-echo "========================================="
-wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/webflux/api/query/500 | tee $RESULTS_DIR/webflux-500ms.txt
-echo ""
-wait_for_requests_to_complete "/webflux"
-sleep 60
+run_case "Testing Traditional MVC CPU (${CPU_DURATION_MS}ms)" \
+    "mvc/api/cpu/${CPU_DURATION_MS}" "mvc-cpu.txt" "/mvc"
+run_case "Testing Virtual Threads CPU (${CPU_DURATION_MS}ms)" \
+    "virtual/api/cpu/${CPU_DURATION_MS}" "virtual-cpu.txt" "/virtual"
+run_case "Testing WebFlux CPU (${CPU_DURATION_MS}ms)" \
+    "webflux/api/cpu/${CPU_DURATION_MS}" "webflux-cpu.txt" "/webflux"
 
-# Test CPU endpoint
-echo "========================================="
-echo "Testing CPU endpoint (Traditional MVC)"
-echo "========================================="
-wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/mvc/api/cpu/${CPU_DURATION_MS} | tee $RESULTS_DIR/mvc-cpu.txt
-echo ""
-wait_for_requests_to_complete "/mvc"
-sleep 60
+run_case "Testing Traditional MVC stress" \
+    "mvc/api/stress?queries=${STRESS_QUERIES}&cpuMs=${STRESS_CPU_MS}" "mvc-stress.txt" "/mvc"
+run_case "Testing Virtual Threads stress" \
+    "virtual/api/stress?queries=${STRESS_QUERIES}&cpuMs=${STRESS_CPU_MS}" "virtual-stress.txt" "/virtual"
+run_case "Testing WebFlux stress" \
+    "webflux/api/stress?queries=${STRESS_QUERIES}&cpuMs=${STRESS_CPU_MS}" "webflux-stress.txt" "/webflux"
 
-echo "========================================="
-echo "Testing CPU endpoint (Virtual Threads)"
-echo "========================================="
-wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/virtual/api/cpu/${CPU_DURATION_MS} | tee $RESULTS_DIR/virtual-cpu.txt
-echo ""
-wait_for_requests_to_complete "/virtual"
-sleep 60
+run_case "Testing Traditional MVC blocking wait (${WAIT_DELAY_MS}ms)" \
+    "mvc/api/wait/${WAIT_DELAY_MS}" "mvc-wait.txt" "/mvc"
+run_case "Testing Virtual Threads blocking wait (${WAIT_DELAY_MS}ms)" \
+    "virtual/api/wait/${WAIT_DELAY_MS}" "virtual-wait.txt" "/virtual"
+run_case "Testing WebFlux non-blocking wait (${WAIT_DELAY_MS}ms)" \
+    "webflux/api/wait/${WAIT_DELAY_MS}" "webflux-wait.txt" "/webflux"
 
-echo "========================================="
-echo "Testing CPU endpoint (WebFlux)"
-echo "========================================="
-wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s ${BASE_URL}/webflux/api/cpu/${CPU_DURATION_MS} | tee $RESULTS_DIR/webflux-cpu.txt
-echo ""
-wait_for_requests_to_complete "/webflux"
-sleep 60
-
-# Test stress endpoint
-echo "========================================="
-echo "Testing stress endpoint (Traditional MVC)"
-echo "========================================="
-wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s "${BASE_URL}/mvc/api/stress?queries=${STRESS_QUERIES}&cpuMs=${STRESS_CPU_MS}" | tee $RESULTS_DIR/mvc-stress.txt
-echo ""
-wait_for_requests_to_complete "/mvc"
-sleep 60
-
-echo "========================================="
-echo "Testing stress endpoint (Virtual Threads)"
-echo "========================================="
-wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s "${BASE_URL}/virtual/api/stress?queries=${STRESS_QUERIES}&cpuMs=${STRESS_CPU_MS}" | tee $RESULTS_DIR/virtual-stress.txt
-echo ""
-wait_for_requests_to_complete "/virtual"
-sleep 60
-
-echo "========================================="
-echo "Testing stress endpoint (WebFlux)"
-echo "========================================="
-wrk -t$THREADS -c$CONNECTIONS -d${DURATION}s "${BASE_URL}/webflux/api/stress?queries=${STRESS_QUERIES}&cpuMs=${STRESS_CPU_MS}" | tee $RESULTS_DIR/webflux-stress.txt
-echo ""
-wait_for_requests_to_complete "/webflux"
+run_case "Testing Traditional MVC SSE (${SSE_EVENTS} events)" \
+    "mvc/api/sse/${SSE_EVENTS}?intervalMs=${SSE_INTERVAL_MS}" "mvc-sse.txt" "/mvc"
+run_case "Testing Virtual Threads SSE (${SSE_EVENTS} events)" \
+    "virtual/api/sse/${SSE_EVENTS}?intervalMs=${SSE_INTERVAL_MS}" "virtual-sse.txt" "/virtual"
+run_case "Testing WebFlux SSE (${SSE_EVENTS} events)" \
+    "webflux/api/sse/${SSE_EVENTS}?intervalMs=${SSE_INTERVAL_MS}" "webflux-sse.txt" "/webflux"
 
 echo "Load testing complete!"
 echo "Results saved to: $RESULTS_DIR"
 echo ""
 echo "Summary:"
 echo "--------"
-echo "Traditional MVC:"
-grep "Requests/sec:" $RESULTS_DIR/mvc-traditional.txt
-echo ""
-echo "Virtual Threads:"
-grep "Requests/sec:" $RESULTS_DIR/virtual-threads.txt
-echo ""
-echo "WebFlux:"
-grep "Requests/sec:" $RESULTS_DIR/webflux.txt
-echo ""
-echo "CPU Test (Traditional MVC):"
-grep "Requests/sec:" $RESULTS_DIR/mvc-cpu.txt
-echo ""
-echo "CPU Test (Virtual Threads):"
-grep "Requests/sec:" $RESULTS_DIR/virtual-cpu.txt
-echo ""
-echo "CPU Test (WebFlux):"
-grep "Requests/sec:" $RESULTS_DIR/webflux-cpu.txt
-echo ""
-echo "Stress Test (Traditional MVC):"
-grep "Requests/sec:" $RESULTS_DIR/mvc-stress.txt
-echo ""
-echo "Stress Test (Virtual Threads):"
-grep "Requests/sec:" $RESULTS_DIR/virtual-stress.txt
-echo ""
-echo "Stress Test (WebFlux):"
-grep "Requests/sec:" $RESULTS_DIR/webflux-stress.txt
+if [[ -x "./summarize-wrk-results.sh" ]]; then
+    ./summarize-wrk-results.sh "$RESULTS_DIR" markdown
+else
+    echo "Traditional MVC query:"
+    grep "Requests/sec:" "$RESULTS_DIR/mvc-traditional.txt" || true
+    echo ""
+    echo "Virtual Threads query:"
+    grep "Requests/sec:" "$RESULTS_DIR/virtual-threads.txt" || true
+    echo ""
+    echo "WebFlux query:"
+    grep "Requests/sec:" "$RESULTS_DIR/webflux.txt" || true
+fi

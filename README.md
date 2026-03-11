@@ -167,6 +167,8 @@ All three applications expose the same REST API endpoints:
 | `GET /api/hello` | Simple hello message |
 | `GET /api/query` | Execute a simulated database query (profile-based timing) |
 | `GET /api/query/{delay}` | Execute query with custom delay in milliseconds |
+| `GET /api/wait/{delayMs}` | Wait for a fixed duration; WebFlux uses non-blocking delay while MVC/virtual use blocking sleep |
+| `GET /api/sse/{events}?intervalMs=M` | Stream SSE events over time; WebFlux uses a reactive stream while MVC/virtual keep a request open per stream |
 | `GET /api/multiple/{count}` | Execute multiple sequential queries |
 | `GET /api/cpu/{durationMs}` | Execute CPU-intensive work for specified duration |
 | `GET /api/stress?queries=N&cpuMs=M` | Combined stress test (I/O + CPU + memory) |
@@ -256,6 +258,22 @@ ab -n 1000 -c 50 http://${LB_IP}/webflux/api/query
 
 ### Load Testing with wrk
 
+### WebFlux Showcase Benchmark
+
+Use [test-webflux-showcase.sh](test-webflux-showcase.sh) together with [WEBFLUX-SHOWCASE-TEST.md](WEBFLUX-SHOWCASE-TEST.md) to highlight the value of true non-blocking delay handling in `WebFlux`.
+
+Example:
+
+```bash
+./test-webflux-showcase.sh 8 2000 60 1000 http://${LB_IP}
+```
+
+To summarize a benchmark directory automatically:
+
+```bash
+./summarize-wrk-results.sh load-test-results-20260306-102118 markdown
+```
+
 **For Local Deployment:**
 
 ```bash
@@ -301,6 +319,24 @@ See the included `load-test-wrk.sh` script for comprehensive automated testing:
 
 # For Kubernetes deployment
 ./load-test-wrk.sh 4 100 30 http://${LB_IP}
+```
+
+The script now runs the following scenario set automatically:
+- standard blocking query
+- long blocking query (`/api/query/500`)
+- CPU-intensive endpoint (`/api/cpu/{durationMs}`)
+- mixed stress endpoint (`/api/stress`)
+- non-blocking wait showcase (`/api/wait/{delayMs}`)
+
+Optional environment overrides:
+
+```bash
+CPU_DURATION_MS=100 \
+STRESS_QUERIES=5 \
+STRESS_CPU_MS=100 \
+WAIT_DELAY_MS=1000 \
+SETTLE_SECONDS=5 \
+./load-test-wrk.sh 8 200 60 http://${LB_IP}
 ```
 
 ## Monitoring
@@ -521,10 +557,19 @@ This project uses GitHub Actions with self-hosted runners for automated build an
 
 - **[QUICKSTART.md](QUICKSTART.md)** - Get started in 5 minutes
 - **[TESTING-GUIDE.md](TESTING-GUIDE.md)** - Comprehensive performance testing strategies
+- **[ACCURATE-COMPARISON-GUIDE.md](ACCURATE-COMPARISON-GUIDE.md)** - Controlled benchmark design for fair Kubernetes comparison
+- **[WEBFLUX-SHOWCASE-TEST.md](WEBFLUX-SHOWCASE-TEST.md)** - Dedicated API and benchmark for highlighting true WebFlux value
 - **[HARDWARE-LIMITS-GUIDE.md](HARDWARE-LIMITS-GUIDE.md)** - Push systems to hardware limits
 - **[DIFFERENCES.md](DIFFERENCES.md)** - Detailed comparison of implementations
 - **[deployment/README.md](deployment/README.md)** - VM deployment guide
 - **[deployment/kubernetes/README.md](deployment/kubernetes/README.md)** - Kubernetes deployment guide
+
+## Benchmark Scripts
+
+- **[load-test-wrk.sh](load-test-wrk.sh)** - Simple ingress-based `wrk` smoke and latency test
+- **[benchmark-k8s-accurate.sh](benchmark-k8s-accurate.sh)** - Controlled Kubernetes benchmark that isolates one app at a time and scales fixed replica counts
+- **[test-webflux-showcase.sh](test-webflux-showcase.sh)** - Showcase benchmark for non-blocking wait scenarios
+- **[summarize-wrk-results.sh](summarize-wrk-results.sh)** - Convert `wrk` result directories into Markdown or CSV summary tables
 
 ## License
 

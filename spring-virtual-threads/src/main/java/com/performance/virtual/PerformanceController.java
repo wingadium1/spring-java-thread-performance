@@ -3,7 +3,9 @@ package com.performance.virtual;
 import com.performance.common.ApiResponse;
 import com.performance.common.DatabaseSimulator;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api")
@@ -27,6 +29,62 @@ public class PerformanceController {
     public ApiResponse queryWithDelay(@PathVariable long delay) {
         String result = databaseSimulator.executeQueryWithDelay("custom-delay-query", delay);
         return new ApiResponse("Query with custom delay executed", result);
+    }
+
+    @GetMapping("/wait/{delayMs}")
+    public ApiResponse waitWithoutWork(@PathVariable long delayMs) {
+        long safeDelayMs = Math.max(0, delayMs);
+        long startTime = System.currentTimeMillis();
+
+        try {
+            Thread.sleep(safeDelayMs);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Wait interrupted", e);
+        }
+
+        long totalTime = System.currentTimeMillis() - startTime;
+        return new ApiResponse(
+            "Blocking wait completed",
+            String.format("Blocking wait finished in %dms (requested %dms)", totalTime, safeDelayMs)
+        );
+    }
+
+    @GetMapping(path = "/sse/{events}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamEvents(
+            @PathVariable int events,
+            @RequestParam(defaultValue = "1000") long intervalMs) {
+        int safeEvents = Math.max(1, Math.min(events, 10_000));
+        long safeIntervalMs = Math.max(1, intervalMs);
+        long timeoutMs = Math.max(30_000L, safeIntervalMs * safeEvents + 5_000L);
+
+        SseEmitter emitter = new SseEmitter(timeoutMs);
+
+        Thread.startVirtualThread(() -> {
+            try {
+                for (int i = 1; i <= safeEvents; i++) {
+                    ApiResponse response = new ApiResponse(
+                        "Virtual-thread SSE event",
+                        String.format("event %d of %d (interval %dms)", i, safeEvents, safeIntervalMs)
+                    );
+
+                    emitter.send(SseEmitter.event()
+                        .name("tick")
+                        .id(String.valueOf(i))
+                        .data(response));
+
+                    if (i < safeEvents) {
+                        Thread.sleep(safeIntervalMs);
+                    }
+                }
+
+                emitter.complete();
+            } catch (Exception e) {
+                emitter.completeWithError(e);
+            }
+        });
+
+        return emitter;
     }
 
     @GetMapping("/multiple/{count}")
