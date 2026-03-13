@@ -1,8 +1,10 @@
 package com.performance.virtual;
 
 import com.performance.common.DatabaseSimulator;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.embedded.tomcat.TomcatProtocolHandlerCustomizer;
 import org.springframework.context.annotation.Bean;
@@ -18,6 +20,9 @@ public class AppConfig {
     @Value("${app.workload.profile:MEDIUM}")
     private String workloadProfile;
 
+    @Autowired
+    private MeterRegistry meterRegistry;
+
     @Bean
     public DatabaseSimulator databaseSimulator() {
         DatabaseSimulator.WorkloadProfile profile;
@@ -28,7 +33,7 @@ public class AppConfig {
             logger.warn("Invalid workload profile '{}', defaulting to MEDIUM", workloadProfile);
             profile = DatabaseSimulator.WorkloadProfile.MEDIUM;
         }
-        return new DatabaseSimulator(profile);
+        return new DatabaseSimulator(profile, meterRegistry);
     }
 
     /**

@@ -151,6 +151,59 @@
           {"format": "s", "label": "Pause Time"},
           {"format": "short"}
         ]
+      },
+      {
+        "title": "DB Query Duration (p95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(db_query_duration_seconds_bucket{application=~\"spring.*\"}[1m]))",
+            "legendFormat": "{{application}} ({{type}}) - p95",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(db_query_duration_seconds_bucket{application=~\"spring.*\"}[1m]))",
+            "legendFormat": "{{application}} ({{type}}) - p50",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Duration"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "DB Query Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+        "targets": [
+          {
+            "expr": "rate(db_query_duration_seconds_count{application=~\"spring.*\"}[1m])",
+            "legendFormat": "{{application}} ({{type}})",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Queries/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "title": "CPU Work Duration (p95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 40},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(db_cpu_work_duration_seconds_bucket{application=~\"spring.*\"}[1m]))",
+            "legendFormat": "{{application}} - p95",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Duration"},
+          {"format": "short"}
+        ]
       }
     ],
     "refresh": "5s",
